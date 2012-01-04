@@ -13,6 +13,7 @@ my $LOG_FILE = "netreg-install.log";
 my $LOG_CONS = 1;
 my $NR_USER = 'netreg';
 my $NR_GRP = 'netreg';
+my $NR_WHEEL = 'sudo';
 my $CONFIG_MODE = '';
 my $NRHOME = '/home/netreg';
 
@@ -175,7 +176,7 @@ sub startup_checks {
 
 sub make_NR_etc {
   my ($dir, $force) = @_;
-  i_mkdir("$dir/etc", 'root', 'wheel', '0755', $force);
+  i_mkdir("$dir/etc", 'root', $NR_WHEEL, '0755', $force);
   foreach my $sub (qw/dhcp-gen dhcp-xfer misc-reports service-gen
 		   service-xfer zone-config zone-gen zone-xfer/) {
     i_mkdir("$dir/etc/$sub", $NR_USER, $NR_GRP, '0775', $force);
@@ -206,28 +207,28 @@ sub make_NR_htdocs {
   }
   my $uname = getUserInput("Web Server User: ", $USER, 1);
   
-  i_mkdir("$dir/htdocs", 'root', 'wheel', '0755', $force);
-  i_mkdir("$dir/htdocs/bin", 'root', 'wheel', '0755', $force);
+  i_mkdir("$dir/htdocs", 'root', $NR_WHEEL, '0755', $force);
+  i_mkdir("$dir/htdocs/bin", 'root', $NR_WHEEL, '0755', $force);
 
-  i_mkdir("$dir/htdocs/reports", $USER, 'wheel', '0775', $force);
+  i_mkdir("$dir/htdocs/reports", $USER, $NR_WHEEL, '0775', $force);
   i_symlink("$dir/stable/netdb/htdocs/img",
 	    "$dir/htdocs/img",
-	    'root', 'wheel', '0755', $force);
+	    'root', $NR_WHEEL, '0755', $force);
   i_symlink("$dir/stable/netdb/htdocs/help", 
 	    "$dir/htdocs/help",
-	    'root', 'wheel', '0775', $force);
+	    'root', $NR_WHEEL, '0775', $force);
   i_symlink("$dir/stable/netdb/htdocs/index.pl",
 	    "$dir/htdocs/index.pl",
-	    'root', 'wheel', '0775', $force);
+	    'root', $NR_WHEEL, '0775', $force);
   i_symlink("$dir/stable/netdb/bin/nc.pl", 
 	    "$dir/htdocs/bin/nc.pl",
-	    'root', 'wheel', '0775', $force);
+	    'root', $NR_WHEEL, '0775', $force);
   i_symlink("$dir/stable/netdb/bin/netreg.pl",
 	    "$dir/htdocs/bin/netreg.pl",
-	    'root', 'wheel', '0775', $force);
+	    'root', $NR_WHEEL, '0775', $force);
   i_symlink("$dir/htdocs/bin/nc.pl",
 	    "$dir/htdocs/nc.pl",
-	    'root', 'wheel', '0775', $force);
+	    'root', $NR_WHEEL, '0775', $force);
 
   return $uname;
 }
@@ -235,7 +236,7 @@ sub make_NR_htdocs {
 sub make_NR_tree {
   my ($dir, $force) = @_;
   
-  i_mkdir("$dir/stable", 'root', 'wheel', '0755', $force);
+  i_mkdir("$dir/stable", 'root', $NR_WHEEL, '0755', $force);
   my $ns = `/bin/pwd`;
   chomp($ns);
   my $start = $ns;
@@ -250,19 +251,19 @@ sub make_NR_tree {
   my $cur = `/bin/pwd`;
   chomp($cur);
   chdir($ns);
-  i_symlink($cur, "$dir/stable/netdb", 'root', 'wheel', '0755', $force);
+  i_symlink($cur, "$dir/stable/netdb", 'root', $NR_WHEEL, '0755', $force);
 }
 
 sub make_NR_lib {
   my ($dir, $force) = @_;
   
-  i_mkdir("$dir/lib", 'root', 'wheel', '0755', $force);
+  i_mkdir("$dir/lib", 'root', $NR_WHEEL, '0755', $force);
   i_symlink("$dir/stable/netdb/lib/CMU",
-	    "$dir/lib/CMU", 'root', 'wheel', '0755', $force);
+	    "$dir/lib/CMU", 'root', $NR_WHEEL, '0755', $force);
   i_symlink("$dir/stable/netdb/lib/DNS",
-	    "$dir/lib/DNS", 'root', 'wheel', '0755', $force);
+	    "$dir/lib/DNS", 'root', $NR_WHEEL, '0755', $force);
   i_symlink("$dir/stable/netdb/lib/startup.pl",
-	    "$dir/lib/startup.pl", 'root', 'wheel', '0755', $force);
+	    "$dir/lib/startup.pl", 'root', $NR_WHEEL, '0755', $force);
 }
    
 sub make_toplevel {
@@ -272,14 +273,14 @@ sub make_toplevel {
   print "\nWe are, of course, offering you the chance to change this, though.\n";
   my $dir = getUserInput("Homedir: ", "/home/netreg", 1);
   $NRHOME = $dir;
-  i_mkdir($dir, 'root', 'wheel', '0755', $force);
-  i_mkdir("$dir/logs", 'root', 'wheel', '0755', $force);
+  i_mkdir($dir, 'root', $NR_WHEEL, '0755', $force);
+  i_mkdir("$dir/logs", 'root', $NR_WHEEL, '0755', $force);
   make_NR_etc($dir, $force);
   make_NR_tree($dir, $force);
   make_NR_lib($dir, $force);
   my $webUName = make_NR_htdocs($dir, $force);
   i_symlink("$dir/stable/netdb/support/bin",
-	    "$dir/bin", 'root', 'wheel', '0755', $force);
+	    "$dir/bin", 'root', $NR_WHEEL, '0755', $force);
   return ($dir, $webUName);
 }
 
@@ -418,7 +419,7 @@ sub add_mysql {
   my $MaintPass = genRandomPassword();
   my $RepPass = genRandomPassword();
 
-  writeFile("$path/etc/.password", $webUser, 'wheel', '0400', $WebPass);
+  writeFile("$path/etc/.password", $webUser, $NR_WHEEL, '0400', $WebPass);
   writeFile("$path/etc/.password-maint", $NR_USER, 
 	    $NR_GRP, '0440', $MaintPass);
   writeFile("$path/etc/.password-reports", $webUser, $NR_GRP, '0440', 
