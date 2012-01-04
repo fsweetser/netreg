@@ -1,0 +1,19 @@
+NetReg formatted TXT records
+
+[NRaa ID_Class_Type_RData Key]
+
+aa can be:
+  MR: Standard Machine Record (A Record)
+  DR: Standard DNS Resource
+  SM: Special Machine Record (derived from)
+  SD: Special DNS Resource (derived from)
+
+ID: NetReg ID
+Class: The record class (IN)
+Type: The record type (CNAME, A, etc..)
+RData: RData for this entry
+
+Key: The derived authentication information.
+
+---
+$Id: dns-txt.desc,v 1.2 2008/03/27 19:42:14 vitroth Exp $

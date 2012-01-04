@@ -1,0 +1,80 @@
+<group DEFAULT>
+  <translate>
+    pattern :
+    replacement :foo:
+  </translate>
+</group>
+
+
+<group local:ignoreme>
+    action ignore
+</group>
+
+
+<dns_zone DEFAULT>
+    accept_pattern (\.local)|(\.edu)|(168.192.in-addr.arpa)|(10.in-addr.arpa)
+    reject_pattern (\d+\.\d+\.\d+\.\d+\.in-addr\.arpa)
+</dns_zone>
+
+
+# action "lookup" means don't overwrite the existing entry, 
+# but allow references to it in imported service groups
+
+# action "override" means replace an existing entry with the imported one
+
+# action "ignore" means ignore this entry in import data, even if no conflict exists
+
+<dns_zone LOCAL>
+    action lookup
+</dns_zone>
+
+<dns_zone OVERRIDE.ME.EDU>
+    action override
+</dns_zone>
+
+<machine HOST.IGNORE.ME.EDU>
+  action ignore
+</machine>
+
+<machine HOST.REPLACE.ME.EDU>
+  action override
+</machine>
+
+<machine HOST.REFERENCE.ME.EDU>
+  action lookup
+</machine>
+
+
+<subnet Foo_Bar>
+    action ignore
+</subnet>
+
+<subnet DEFAULT>
+    prefix "Imported - "
+    abbr_prefix i-
+    overlap_action overwrite
+</subnet>
+
+<vlan DEFAULT>
+    prefix "Imported - "
+    abbr_prefix i-
+    overlap_action overwrite
+</vlan>
+
+<service DEFAULT>
+    prefix "IMPORT-"
+</service>
+
+<service netsage>
+    action ignore
+</service>
+
+<global_settings>
+ <dhcp_option>
+   next-server import
+   domain-name import
+   time-servers import
+   ntp-servers import
+   domain-name-servers import
+ </dhcp_option>
+</global_settings>

@@ -1,0 +1,75 @@
+##
+## General ideas on protections
+##
+## $Id: protections,v 1.3 2008/03/27 19:42:15 vitroth Exp $
+##
+
+Memberships/Protections Tables:
+
+  A user shall only be allowed to view data from specifically protected
+tables if they have appropriate permission.
+
+  Appropriate permission is defined as having READ access in the protections
+table. The permissions entry must be:
+ - the UserID plus the specific row to be accessed
+ - the UserID plus '0' to indicate full permission to the table
+ - the GroupID of a group UserID is a member of, plus the specific row
+ - the GroupID of a group UserID is a member of, plus '0' for the entire table
+
+
+## World-readable tables. ##
+The following tables are defined as 'world-readable' because they only contain
+general, well-known data or used as a foreign key / type list.
+
+- building
+- dhcp_option_type
+- dns_resource_type
+- outlet_type
+
+## Sub-table permissions. ##
+Some tables have different access rights depending upon the person executing
+the query, and their level of access. A scheme has been established wherein
+users may have different access levels, generally defined as level 1 (lowest
+level of access) through level 9 (highest level).
+
+For tables with multiple access levels, additional possible values will be
+allowed in the protections set. The base table name (e.g. 'machine') will have
+level 1, while any additional levels will be set as 'machine_lX', where X 
+is the level.
+
+Users will be granted rights to tables as normal, however the API and frontend
+components MUST enforce certain restrictions depending upon the access level.
+Users in higher access levels are assumed to inherit all access available at
+lesser levels.
+
+The table below defines what tables and fields have additional access
+restrictions / API enforcement. For example, if user 'ju33' has level 1 access
+to 'machine', he may add a typical machine but is not allowed to specify
+certain values (including the IP address), while 'kevinm' with level 9 access
+is able to specify additional values.
+
+ACCESS MATRIX / API ENFORCEMENT
+
+Table: machine
+Description: Stores machine entries.
+Multiple Access Levels: Yes, 1 and 9.
+
+Field		| Comments
+-----------------------------------------------------------------------------
+version		| version information - only updated in DB UPDATE statements
+id		| id information - assigned by DB upon ADD only
+mac_address	| L1 read/write
+host_name	| L1 with validity checking for domain name - r/w
+ip_address	| L9 write iff subnet matches, L1 can read by NOT write
+mode		| L1 may specify 'static', 'dynamic'. L9 may specify all
+flags		| L9 may specify, L1 has NO access (read or write)
+comment		| L9 may specify, L1 has NO access (read or write)
+account		| at this time, NO access is granted to read/write
+host_name_ttl	| L9 may specify, L1 has NO access
+ip_address_ttl	| L9 may specify, L1 has NO access
+host_name_zone	| assigned by API ONLY - no READ permission
+ip_address_zone	| assigned by API ONLY - no READ permission
+ip_address_subnet| L1/L9 may read/write, subject to verification
+
+
+

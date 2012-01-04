@@ -1,0 +1,585 @@
+#! /usr/bin/perl
+#
+# Copyright 2004 Duke University. All rights reserved.
+#
+# Licensed under the terms of the CMU NetReg/NetMon distribution.
+#
+# 31 Aug 04 - kcmiller@duke.edu - Original version, based on significant
+#                                 inspiration from cpanflute2
+#
+# $Id: netregspec,v 1.2 2007/10/04 22:02:32 vitroth Exp $
+#
+#
+
+use strict;
+use warnings;
+
+use File::Temp qw/tempdir/;
+use RPM::Specfile;
+use Getopt::Long;
+use POSIX qw/strftime/;
+use File::Copy qw/copy/;
+use File::Basename;
+use Cwd;
+
+# Static options to be set in the RPM specfile. Each key is
+# a function in RPM::Specfile that will be called with the value.
+my %RPMSettings = ('Name' => 'cmu-netreg',
+		   'Summary' => 'Network Registration System',
+		   'Distribution' => 'Contributed',
+		   'Group' => 'Applications/Internet',
+		   'License' => 'BSD',
+		   'Url' => 'http://www.net.cmu.edu/netreg',
+		   'Prefix' => '/srv/netreg',
+		   'Requires' => 'MySQL-server >= 4.0.21, MySQL-client >= 4.0.21, bind > 9.0.0, rsync, openssh-clients',
+		   'description' => 
+q{NetReg provides administrators a central platform for administration of
+network information. NetReg keeps a database of subnet information, DNS zones,
+DHCP options, machine registrations, and more. It has a finely grained
+access control mechanism to provide administrators maximum flexibility in
+delegating access.},
+		   'packages' => {
+		       'htdocs' => {'Summary' => 'NetReg Web Files',
+				    'Group' => 'Applications/Internet',
+				    'Requires' => 'cmu-netreg, cmu-netreg-libs',
+				    'Prefix' => '/srv/netreg',
+				    'description' => 
+q{Components necessary to provide the web front-end and operate the NetReg
+service.}
+				    },
+		       'libs' => {'Summary' => 'NetReg Libraries',
+				  'Group' => 'Applications/Internet',
+				  'Requires' => 'cmu-netreg',
+				  'description' =>
+q{NetReg libraries and documentation. Required to operate a NetReg service.}
+			      },
+
+		   });
+
+my %defaults = ('cvsroot' => 'unix.andrew.cmu.edu:/afs/andrew.cmu.edu/system/cvs',
+		'outdir' => './',
+		'tmpdir' => '/tmp',
+		'cvsbuild' => 0,
+		'releasebuild' => '',
+		'buildrpm' => 1,
+		'sign' => 0,
+		'clean' => 1,
+		'custom-deps' => 0,
+		'cvshead' => 0,
+		'cvspath' => 'src/netdb',
+		'cvstag' => ''
+		);
+
+# Getopt options
+my %options;
+my $res = GetOptions (\%options, "write-specfile|ws=s", "buildrpm|b!",
+		      "cvsbuild|c!", "cvsroot=s", "cvspath=s",
+		      "releasebuild|r=s", "cvstag=s",
+		      "releasenum=i", "tmpdir=s", "outdir=s", "email=s",
+		      "clean!", "custom-deps!", "patch=s@",
+		      "help|h|usage", "sign!", "add=s", 'cvshead!')
+    or usage();
+
+usage() if (defined $options{'help'} && $options{'help'} == 1);
+
+# Merge defaults into options
+map { $options{$_} = $defaults{$_} unless (defined $options{$_}) } 
+keys %defaults;
+
+# Basic sanity checking of options
+if ($options{'cvsbuild'} == 1 && $options{'releasebuild'} ne '') {
+    warn "Conflicting options: CVS build and Release build";
+    usage();
+}elsif($options{'cvsbuild'} != 1 && $options{'releasebuild'} eq '') {
+    warn "Nothing to do; specify --cvsbuild or --releasebuild";
+    usage();
+}
+
+# CVS Tags
+$options{'cvstag'} = 'HEAD' if ($options{'cvshead'} == 1);
+
+# Times
+my $now = time();
+my $RelDate = strftime("%Y%m%d", localtime($now));
+my $CvsDate = strftime("%Y-%m-%d", localtime($now));
+
+# Get a private tmpdir
+$options{'ptmpdir'} = tempdir(CLEANUP => $options{'clean'}, 
+			      DIR => $options{'tmpdir'});
+
+# If we're building from CVS, checkout CVS and make a tar file
+make_cvs_tarball() if ($options{'cvsbuild'} == 1);
+
+# We should now have $options{'releasebuild'}, even if coming from cvs
+unless (-e $options{'releasebuild'}) {
+    die "Source file not specified: $options{'releasebuild'}";
+}
+copy($options{'releasebuild'}, $options{'ptmpdir'});
+
+my $spec = {};
+
+# Check for local additions
+add_locals($spec) if (defined $options{'add'});
+
+basic_settings($spec);
+prep($spec);
+make($spec);
+install($spec);
+clean($spec);
+scripts($spec);
+files($spec);
+
+write_macros();
+write_rpmrc();
+
+open(FILE, ">$options{'ptmpdir'}/netreg.spec");
+print FILE $spec->{'out'};
+close(FILE);
+if (defined $options{'write-specfile'}) {
+    open(FILE, ">$options{'write-specfile'}");
+    print FILE $spec->{'out'};
+    close(FILE);
+}
+
+my @Cmd = buildrpm_command();
+print "Build command: ".join(' ', @Cmd)."\n";
+
+if ($options{'buildrpm'} == 1) {
+    system(@Cmd) == 0 or die "RPM build failed!";
+}
+
+exit(0);
+
+
+## *************************************************************************
+## Specfile components
+
+sub add_locals {
+    my ($spec) = @_;
+
+    return unless (-d $options{'add'});
+
+    # Find any patches
+    if (-e $options{'add'}.'/patchinfo') {
+	$options{'patch'} = [] unless (defined $options{'patch'} && 
+				       ref $options{'patch'} eq 'ARRAY');
+
+	open(PATCHES, $options{'add'}.'/patchinfo');
+	while(my $line = <PATCHES>) {
+	    next if ($line =~ /^\s*\#/);
+
+	    my ($file, $plevel) = split(/\s+/, $line);
+	    push(@{$options{'patch'}}, $options{'add'}."/$file:$plevel");
+	}
+	close(PATCHES);
+    }
+	
+    # Look for script additions -- pre, post, preun, postun
+    # for all packages as well
+    my @Scripts = qw/pre post preun postun/;
+    my @AllScripts = @Scripts;
+    foreach my $pack (keys %{$RPMSettings{'packages'}}) {
+	push(@AllScripts, map { "$_-$pack" } @Scripts);
+    }
+
+    foreach my $Script (@AllScripts) {
+	if (-e $options{'add'}."/$Script") {
+	    open(SCRIPT, $options{'add'}."/$Script");
+	    my @SC = <SCRIPT>;
+	    close(SCRIPT);
+	    $spec->{'scripts'}->{$Script} .= join('', @SC);
+	}
+    }
+}
+
+sub basic_settings {
+    my ($spec) = @_;
+
+    $spec->{'out'} .= join("\n", map { 
+	(defined $RPMSettings{$_} ? "$_: $RPMSettings{$_}" : ()) }
+			  qw/Summary Name Distribution License Group
+			  Url Requires Prefix/);
+
+    my $tarfile = basename($options{'releasebuild'});
+    if ($tarfile =~ /cvs_build-(\d+)/) {
+	$spec->{'version'} = 'cvs_build';
+	$spec->{'release'} = $RelDate;
+    }else{
+	$tarfile =~ /netdb-([\d\.]+)\.t(ar\.gz|gz)$/;
+	$spec->{'version'} = $1;
+	if (defined $options{'releasenum'} && $options{'releasenum'} ne '') {
+	    $spec->{'release'} = $options{'releasenum'};
+	}else{
+	    $spec->{'release'} = 1;
+	}
+    }
+
+    $spec->{'out'} .= qq{
+Version: $spec->{'version'}
+Release: $spec->{'release'}
+BuildArch: noarch
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
+Source0: $tarfile
+};
+
+    if (defined $options{'patch'} && ref $options{'patch'} eq 'ARRAY') {
+	my $PatchN = 0;
+	foreach my $File (@{$options{'patch'}}) {
+	    my $PStripLevel = 0;
+	    if ($File =~ /\:(\d+)$/) {
+		$PStripLevel = $1;
+		$File =~ s/\:\d+$//;
+	    }
+
+	    die "Patch file $File not found!" unless (-e $File && -r $File);
+	    my $FileBaseName = basename($File);
+	    copy($File, $options{'ptmpdir'}."/$FileBaseName");
+
+	    $spec->{'out'} .= "Patch$PatchN: $FileBaseName\n";
+	    $spec->{'prep'} .= "%patch$PatchN -p$PStripLevel\n";
+
+	    $PatchN++;
+	}
+    }
+
+
+    $spec->{'out'} .= "Packager: $options{'email'}\n" 
+	if (defined $options{'email'} && $options{'email'} ne '');
+
+    $spec->{'out'} .= qq{
+%description
+$RPMSettings{'description'}
+
+};
+
+    if (ref $RPMSettings{'packages'} eq 'HASH') {
+	foreach my $Pack (keys %{$RPMSettings{'packages'}}) {
+	    my $pinfo = $RPMSettings{'packages'}->{$Pack};
+
+	    $spec->{'out'} .= qq{
+%package $Pack
+};
+	    
+	    $spec->{'out'} .= join("\n", map {
+		(defined $pinfo->{$_} ? "$_: $pinfo->{$_}" : ()) }
+		 qw/Prefix Summary Group Prereq Requires Obsoletes Conflicts/);
+
+	    $spec->{'out'} .= "\n%description $Pack\n".$pinfo->{'description'}.
+		"\n\n";
+	    
+	}
+    }
+}
+
+sub prep {
+    my ($spec) = @_;
+
+    if ($spec->{'version'} eq 'cvs_build') {
+	$spec->{'out'} .= qq{
+%prep
+%setup -n netdb-%{version}-%{release}
+};
+    }else{
+	$spec->{'out'} .= qq{
+%prep
+%setup -n netdb-%{version}
+};
+    }
+    $spec->{'out'} .= $spec->{'prep'} if (defined $spec->{'prep'});
+}
+
+sub clean {
+    my ($spec) = @_;
+
+    $spec->{'scripts'}->{'clean'} .= q{
+rm -rf $RPM_BUILD_ROOT
+};
+}
+
+sub make {
+    my ($spec) = @_;
+
+}
+
+sub install {
+    my ($spec) = @_;
+
+    # CWD is the base of the unpacked distribution in $options{'ptmpdir'}
+
+    $spec->{'scripts'}->{'install'} .= q{
+# Remove CVS directories
+find . -depth -name CVS -type d -exec rm -rf {} \;
+
+# docs
+%define nrdocdir "%{_docdir}/%{name}-%{version}-%{release}"
+%{__mkdir_p} $RPM_BUILD_ROOT%{nrdocdir}
+
+# lib
+eval `perl '-V:installsitelib'`
+%{__mkdir_p} $RPM_BUILD_ROOT$installsitelib
+%{__cp} -a lib/* $RPM_BUILD_ROOT$installsitelib
+
+# For now, copy one of the test sets to use as initial data
+%{__cp} $RPM_BUILD_ROOT$installsitelib/CMU/Netdb/t/db-primitives-1 $RPM_BUILD_ROOT%{nrdocdir}
+
+# Remove any non-modules and 't' test directories
+find $RPM_BUILD_ROOT$installsitelib -depth -name t -type d -exec rm -rf {} \;
+find $RPM_BUILD_ROOT$installsitelib -depth \! \( -name '*.pm' -o -type d \) -exec rm {} \;
+
+# htdocs
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg
+%{__cp} -a htdocs $RPM_BUILD_ROOT/srv/netreg
+
+# support/bin
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg/bin
+%{__cp} -a support/bin/* $RPM_BUILD_ROOT/srv/netreg/bin
+
+# support/sbin .. just shove it in share for now
+%{__cp} -a support/sbin $RPM_BUILD_ROOT/srv/netreg
+
+# bin .. also into htdocs
+%{__cp} -a bin $RPM_BUILD_ROOT/srv/netreg/htdocs
+
+# docs
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg/etc
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg/etc/zone-gen
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg/etc/zone-xfer
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg/etc/zone-config
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg/etc/dhcp-gen
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg/etc/dhcp-xfer
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg/etc/service-gen
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg/etc/service-xfer
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg/.ssh
+
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg/logs
+
+%{__cp} -a doc/* $RPM_BUILD_ROOT%{nrdocdir}
+
+%{__mkdir_p} $RPM_BUILD_ROOT/etc/httpd/conf.d
+mv $RPM_BUILD_ROOT%{nrdocdir}/apache-netreg.conf $RPM_BUILD_ROOT/srv/netreg/etc
+mv $RPM_BUILD_ROOT%{nrdocdir}/netreg.cron $RPM_BUILD_ROOT/srv/netreg/etc
+mv $RPM_BUILD_ROOT%{nrdocdir}/netreg-*.conf $RPM_BUILD_ROOT/etc
+
+%{__mkdir_p} $RPM_BUILD_ROOT/srv/netreg/archive
+
+# Just generate a list of the files here; makes it easier to 
+# tell rpmbuild about them
+find $RPM_BUILD_ROOT -type f \
+| sed "s@^$RPM_BUILD_ROOT@@g" \
+> %{name}-%{version}-%{release}-filelist
+
+
+};
+    custom_dependencies($spec)
+	if (defined $options{'custom_deps'} && $options{'custom_deps'} == 1);
+}
+
+sub scripts {
+    my ($spec) = @_;
+
+    foreach my $Script (keys %{$spec->{'scripts'}}) {
+	if ($Script =~ /^(.+)\-(.+)$/) {
+	    $spec->{'out'} .= "\%$1 $2\n";
+	}else{
+	    $spec->{'out'} .= "\%$Script\n";
+	}
+
+	$spec->{'out'} .= $spec->{'scripts'}->{$Script}."\n";
+    }
+}
+
+sub files {
+    my ($spec) = @_;
+
+    $spec->{'out'} .= q{
+%files
+%defattr (-,netreg,root,-)
+%dir /srv/netreg
+%dir /srv/netreg/etc
+%dir /srv/netreg/etc/zone-gen
+%dir /srv/netreg/etc/zone-xfer
+%dir /srv/netreg/etc/zone-config
+%dir /srv/netreg/etc/dhcp-gen
+%dir /srv/netreg/etc/dhcp-xfer
+%dir /srv/netreg/etc/service-gen
+%dir /srv/netreg/etc/service-xfer
+%dir /srv/netreg/archive
+%dir /srv/netreg/.ssh
+
+%dir /srv/netreg/logs
+
+%files libs
+%defattr (-,root,root,-)
+/usr/lib/perl5/site_perl
+%config /etc/netreg-netdb.conf
+%config /etc/netreg-webint.conf
+%config /etc/netreg-soap.conf
+%{nrdocdir}
+
+%files htdocs
+%defattr (-,root,root,-)
+/srv/netreg/bin
+/srv/netreg/htdocs
+/srv/netreg/sbin
+%config /srv/netreg/etc/apache-netreg.conf
+%config /srv/netreg/etc/netreg.cron
+
+};
+}
+
+## XXX This is not currently working properly. rpmbuild expects to 
+## send a list of files on STDIN and receive requires/provides on stdout.
+## Ideally our "requires" script reads STDIN, runs the base 
+## requires/provides scripts, then removes from output any requirements
+## that are also provided. 
+sub custom_dependencies {
+    my ($spec) = @_;
+
+    my $Perl = `rpm --eval '%__perl'`;
+    my $Req = `rpm --eval '%__find_requires'`;
+    my $Provides = `rpm --eval '%__find_provides'`;
+    chomp($Req); chomp($Provides);
+
+    open(FILE, ">$options{'ptmpdir'}/requires.pl");
+    print FILE '#!'.$Perl;
+    print FILE q~
+map { $a{$_} = 1; } split(/\n/, `~.$Provides.q~ @ARGV`);
+my @U = map { (defined $a{$_} ? () : $_) } split(/\n/, `~.$Req.q~ @ARGV`);
+print join("\n", @U);
+    ~;
+    close(FILE);
+
+#    $spec->push_source('requires.pl');
+
+    return q{
+%define _use_internal_dependency_generator 0
+%define __find_requires requires.pl
+};
+
+}
+
+sub changelog {
+    my ($spec) = @_;
+
+    my @Days = qw/Sun Mon Tue Wed Thu Fri Sat/;
+    my @LT = localtime($now);
+    
+    my $CLDay = strftime($Days[$LT[6]]." %b %d %Y", localtime($now));
+    
+    $spec->{'out'} .= qq{
+%changelog
+* $CLDay $ENV{USER} - $spec->{'version'}-$spec->{'release'}
+- Specfile autogenerated by netregspec
+};
+}
+
+
+## *************************************************************************
+## Helper functions
+
+## Just check out the src from CVS and tar up.
+sub make_cvs_tarball {
+    my $CDIR = getcwd();
+
+    my $cvstmp = tempdir(CLEANUP => $options{'clean'}, 
+			 DIR => $options{'tmpdir'});
+    chdir($cvstmp);
+
+    if ($options{'cvsroot'} =~ /:pserver/) {
+      system("cvs -d $options{'cvsroot'} login") == 0
+  	  or die "cvs login failed: $?";
+    }
+
+    my $Tag = "-D $CvsDate";
+    $Tag = "-r ".$options{'cvstag'} if ($options{'cvstag'} ne '');
+
+    system("cvs -d $options{'cvsroot'} checkout -d netdb-cvs_build-$RelDate ".
+	   "$Tag netreg") == 0
+	   or die "cvs checkout failed: $?";
+    system("tar zcf netdb-cvs_build-$RelDate.tgz netdb-cvs_build-$RelDate") ==0
+	or die "tar failed: $?";
+
+    $options{'releasebuild'} = "$cvstmp/netdb-cvs_build-$RelDate.tgz";
+
+    chdir($CDIR);
+}
+
+## the macro and rpmrc file let us use private directories to build the
+## RPM; otherwise it's likely you need to be root (or have write access
+## across /usr/src/redhat) to build 
+sub write_macros {
+    open(FILE, ">$options{'ptmpdir'}/macros")
+	or die "Error opening $options{'ptmpdir'}/macros: $!";
+    print FILE qq{
+%_topdir         $options{'ptmpdir'}
+%_builddir       %{_topdir}
+%_rpmdir         $options{'outdir'}
+%_sourcedir      %{_topdir}
+%_specdir        %{_topdir}
+%_srcrpmdir      $options{'outdir'}
+%_build_name_fmt %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm
+};
+    close(FILE);
+}
+
+sub write_rpmrc {
+    my $macrofiles = qx(rpm --showrc | grep ^macrofiles | cut -f2- -d:);
+    chomp $macrofiles;
+
+    open(FILE, ">$options{'ptmpdir'}/rpmrc")
+	or die "Error opening $options{'ptmpdir'}/rpmrc: $!";
+    print FILE qq{
+include: /usr/lib/rpm/rpmrc
+macrofiles: $macrofiles:$options{'ptmpdir'}/macros
+};
+    close(FILE);
+}
+
+## Generate the actual command used to invoke buildrpm, pointing at our
+## custom rc file
+sub buildrpm_command {
+    my @Cmd;
+    push(@Cmd, 'rpmbuild');
+    push(@Cmd, '--rcfile', "$options{'ptmpdir'}/rpmrc");
+    push(@Cmd, '-ba');
+    push(@Cmd, '--sign') if ($options{'sign'} == 1);
+    push(@Cmd, $options{'ptmpdir'}."/netreg.spec");
+    return @Cmd;
+}
+
+sub usage {
+    print q{
+netregspec [options]
+
+   Options (defaults listed first when --no[x] applies)
+
+   --add [dir]                Specifies a directory of patches/additional 
+                              source files to add to the build
+   --buildrpm (--nobuildrpm)  (Do not) execute rpmbuild
+   --clean (--noclean)        (Do not) clean up temporary build directories
+
+ ONE REQUIRED/MUTUALLY EXCLUSIVE:
+   --nocvsbuild (--cvsbuild)  (Do not) build from CVS
+   --releasebuild [file]      Build from specified file (.tgz)
+
+ OTHER OPTIONS:
+   --cvsroot [root]           Use [root] as CVS root when building
+                              Defaults to anonymous@cvs.andrew.cmu.edu
+   --cvshead                  Retrieve files from the CVS HEAD (--cvstag HEAD)
+   --cvstag [tag]	      Checkout specified CVS tag
+   --cvspath [path]	      NetReg directory under the CVS root (e.g. src/netdb)
+   --email [email]            Email address to include in specfile
+   --outdir [dir]             Drop finished RPMs here (Default: ./)
+   --patch [file[:level]]     Add file as patch (multiple instances valid)
+                              Optionally 'level' indicates the number of 
+			      directory levels to strip from the patch file.
+			      Default is '0'.			      
+   --releasenum [number]      Add Release: [number] to specfile
+   --nosign (--sign)          (Do not) sign RPM (uses your RPM defaults)
+   --tmpdir [dir]             Use [dir]/<random> for building (Default: /tmp)
+   --write-specfile [spec]    Write the specfile to [spec] in addition to
+                              other operations. Not necessary unless curious.
+};
+
+    exit 1;
+}

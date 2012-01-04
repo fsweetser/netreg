@@ -1,0 +1,20 @@
+port 904
+^*|17|1|1005041491|1005041711|0.19|0.16|0.15|317|114|81|0|0
+^*|17|1|1005041491|1005041711|0.18|0.16|0.15|317|114|81|0|0
+
+Fields:
+0         ^*: means that it's periodic
+1         17: delay between iterations
+2          1: ?? (sprintf)
+3 1005041491: boot time
+4 1005041711: start time
+5       0.19: 5 sec load average
+6       0.16: 1 min load average
+7       0.15: 5 min load average
+8        317: number of processes
+9        114: number of root processes
+10        81: number of users
+11         0: number of system processes
+12         0: number of AFS servers down
+   
+

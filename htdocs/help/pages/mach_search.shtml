@@ -1,0 +1,59 @@
+<!--#include file="header.html" -->
+<!--#include file="sidebar.html" -->
+<a name="mach_search"></a>
+<p class="c5">Searching Machines</p>
+
+<p>If you have a large number of machines registered, or if you are
+a member of a group that has access to a large number of machine
+registrations, you may want to search for a particular machine to
+view or edit rather than wade through the list to find it.</p>
+
+<p>To search for machines matching some criteria:</p>
+
+<ol>
+<li>Click on the <b>[Search Machines]</b> link at the top of the
+Registered Machines table on the Main page.<br>
+<br>
+ The Search Machines page is displayed.<br>
+<br>
+</li>
+
+<li>Enter your search criteria in the fields shown. Note that only
+machines matching ALL of the criteria you enter will be found.<br>
+<br>
+ The following fields are available:<br>
+<br>
+ <a href="../definitions/mac_address.shtml" target="_blank">Hardware
+Address</a><br>
+ <a href="../definitions/ip_address.shtml" target="_blank">IP
+Address</a><br>
+ <a href="../definitions/host_name.shtml" target="_blank">Hostname</a><br>
+ <a href="../definitions/mode.shtml" target="_blank">Mode</a><br>
+ <a href="../definitions/ip_address_subnet.shtml" target="_blank">Subnet</a><br>
+ <a href="../definitions/domain.shtml" target="_blank">Domain</a><br>
+ <a href="../definitions/ip_address_zone.shtml" target="_blank">IP Address
+Zone</a><br>
+ <a href="../definitions/user.shtml" target="_blank">User</a>/<a href=
+"../definitions/group.shtml" target="_blank">Group</a>/<a href=
+"../definitions/department.shtml">Affiliation</a><br>
+<br>
+</li>
+
+<li>Click on the Search button.<br>
+<br>
+ The machines matching all of the criteria you entered will be
+displayed.<br>
+<br>
+</li>
+
+<li>Click on a hostname in the Search Results page to view/update
+information for that machine.<br>
+<br>
+ If no machines, or too many machines, are listed in the search
+results, use your browser's Back button to return to the Search
+Machines page and enter new criteria.</li>
+</ol>
+<!--#include file="footer.html" -->
+<!-- 
+$Id: mach_search.shtml,v 1.6 2008/03/27 19:42:26 vitroth Exp $
+-->

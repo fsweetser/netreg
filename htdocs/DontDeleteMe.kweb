@@ -1,0 +1,16 @@
+<html>
+<title> kweb project: Mac installation</title>
+<body>
+<center>
+<h1>KWeb Project</h1>
+<hr>
+</center>
+Here is how to install Kclient and SideCar on your Mac:
+<UL>
+<LI>ftp to a host with AFS access,  get and unstuff ~dousti/kweb/sidecar/mac/kclient+sidecar.sit
+<LI>put the Kclient file in the extensions folder of your system folder
+<LI>put sidecar file in the startup folder of your system folder
+<LI>restart your machine
+<LI>make sure the time zone in map (in control panel) is set to zero (i.e GMT).
+<LI>visit <A HREF=test.html>this</A> to test it
+</UL>

@@ -1,0 +1,13 @@
+netdb-conf = t-netdb-conf
+email = acs+ng.project.netdb.errors@andrew.cmu.edu
+path = /bin:/usr/bin:/usr/local/bin
+
+# netdb-schema (path to netdb schema, default is doc/db/NETREG-COMPLETE.sql)
+
+# test-db
+<test-db>
+	# connect_string should be: family:dbtype:database:host
+	connect_string = DBI:mysql:netdb-test:localhost
+	username = netdb-test
+	password_file = /home/netreg/etc/.password-netdb-test
+</test-db>

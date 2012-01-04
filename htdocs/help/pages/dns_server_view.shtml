@@ -1,0 +1,7 @@
+<!--#include file="header.html" -->
+<!--#include file="sidebar.html" -->
+
+<!--#include file="footer.html" -->
+<!-- 
+$Id: dns_server_view.shtml,v 1.2 2008/03/27 19:42:26 vitroth Exp $
+-->

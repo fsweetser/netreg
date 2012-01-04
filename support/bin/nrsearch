@@ -1,0 +1,243 @@
+#! /usr/bin/perl
+##
+## nrsearch
+## A script to run NetReg searches via SOAP.
+## This script is primarily a code example for using the SOAP interface.
+##
+# Copyright (c) 2004-2005 Carnegie Mellon University. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# 3. The name "Carnegie Mellon University" must not be used to endorse or
+#    promote products derived from this software without prior written
+#    permission. For permission or any legal details, please contact:
+#      Office of Technology Transfer
+#      Carnegie Mellon University
+#      5000 Forbes Avenue
+#      Pittsburgh, PA 15213-3890
+#      (412) 268-4387, fax: (412) 268-7395
+#      tech-transfer@andrew.cmu.edu
+#
+# 4. Redistributions of any form whatsoever must retain the following
+#    acknowledgment: "This product includes software developed by Computing
+#    Services at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+#
+# CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS
+# SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS,
+# IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE FOR ANY SPECIAL,
+# INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+# OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+# PERFORMANCE OF THIS SOFTWARE.
+
+use strict;
+
+
+use lib '/usr/ng/lib/perl5';
+
+use CMU::Netdb::SOAPClient;
+use CMU::Netdb::helper;
+use Data::Dumper;
+use Getopt::Long;
+
+## **********************************************************************
+my $IP = '';
+my $MAC = '';
+my $HN = '';
+my $CatID = '';
+my $RemedySR = '';
+my $Writable = '';
+my $User = '';
+my $Group = '';
+my $Entitlement = '';
+my $AndJoin = '';
+my $OrJoin = '';
+my $Regexp = '';
+my $server = 'netreg-soap.net.cmu.edu';
+my $Help = '';
+my $kx509 = 0;
+my $debug = 0;
+my $ident = 0;
+
+my $result = GetOptions ("ip=s" => \$IP,
+			 "hn=s" => \$HN,
+			 "mac=s" => \$MAC,
+			 "writable=s" => \$Writable,
+			 "user=s" => \$User,
+			 "group=s" => \$Group,
+#			 "and" => \$AndJoin,
+#			 "or" => \$OrJoin,
+			 "regexp" => \$Regexp,
+			 "h" => \$Help,
+			 "kx509|k" => \$kx509,
+                         "server=s" => \$server,
+			 "identify-db" => \$ident,
+			 "debug" => \$debug);
+## **********************************************************************
+
+if ($Help) {
+  usage();
+  exit 0;
+}
+
+
+main();
+
+sub main {
+  my %SearchInfo;
+
+  $SearchInfo{'ip_address'} = $IP if ($IP ne '');
+  $SearchInfo{'mac_address'} = $MAC if ($MAC ne '');
+  $SearchInfo{'host_name'} = $HN if ($HN ne '');
+
+  my $where = "";
+
+  foreach (keys %SearchInfo) {
+    if ($Regexp) {
+      $where = "$_ LIKE '%$SearchInfo{$_}%' ";
+    } else {
+      $where = "$_ = '$SearchInfo{$_}' ";
+    }
+  }
+
+  die "No search specified" if ($where eq "" && !$Writable && !$User && !$Group);
+
+  my $conn;
+  if ($kx509) {
+    my $list = `kxlist 2>/dev/null`;
+    if (!($list =~ /issuer/s)) {
+      print $list;
+      system "kx509 1>/dev/null 2>&1";
+      $list = `kxlist 2>/dev/null`;
+      if (!($list =~ /issuer/s)) {
+	print $list;
+	die "Unable to obtain KX509 certificate.  Kerberos tickets expired?";
+      }
+    }
+    umask(0077);
+    system "kxlist -o $ENV{KRB5CCNAME}-$$.crt 1>/dev/null 2>&1";
+    $conn = getSOAPConnection({'proxy' => "https://$server/cbin/netreg-soap/$0",
+			       'method' => 'x509',
+			       'x509' => { 'type' => 'pem',
+					   'pem' => { 'certfile' => $ENV{KRB5CCNAME}."-$$.crt",
+						      'keyfile' => $ENV{KRB5CCNAME}."-$$.crt",
+						    },
+					 },
+
+			      });
+
+  } elsif (-f '/home/netreg/etc/.certs/netmon2.net.cmu.edu.crt') {
+    $conn = getSOAPConnection({'proxy' => "https://$server/cbin/netreg-soap/$0",
+			       'method' => 'x509',
+			       'x509' => { 'type' => 'pem',
+					   'pem' => { 'certfile' => "/home/netreg/etc/.certs/netmon2.net.cmu.edu.crt",
+						      'keyfile' => "/home/netreg/etc/.certs/netmon2.net.cmu.edu.key"},
+					 },
+			      });
+  } else {
+    $conn = getSOAPConnection({'proxy' => "https://$server/cbin/netreg-soap/$0",
+			       'method' => 'x509',
+			       'x509' => { 'type' => 'pkcs12',
+					   'pkcs12' => { 'filename' => "$ENV{HOME}/.identity.pfx",
+							 'password-prompt' => 1 },
+					 },
+			      });
+  }
+
+  if ($debug) {
+    $conn->on_debug(sub{my $out = join("\n",@_)."\n"; $out =~ s/>/>\n/g; print $out;});
+  }
+
+  # This syntax:
+  #  SOAP::Data->name('user')->value("foo@andrew.cmu.edu");
+  # Is merely a shortcut for:
+  #  $foo = new SOAP::Data;
+  #  $foo->name('user');
+  #  $foo->value("foo@andrew.cmu.edu");
+  my $soapRes;
+
+
+  if ($ident) {
+    $soapRes = $conn->get_db_hostname();
+    if ($soapRes->fault) {
+      print "Error fetching database name: ".$soapRes->faultdetail."\n";
+    } else {
+      my @res = $soapRes->paramsall;
+      print "Database Server is: ".$res[0][1]."\n";
+    }
+  }
+    
+
+  if ($Writable) {
+    $soapRes = $conn->list_machines_writable_by_user(SOAP::Data->name('user')->value($Writable), 
+						     SOAP::Data->name('where')->value($where));
+  } elsif ($User) {
+    $soapRes = $conn->list_machines_by_user(SOAP::Data->name('user')->value($User), 
+					    SOAP::Data->name('where')->value($where));
+  } elsif ($Group) {
+    $soapRes = $conn->list_machines_by_group(SOAP::Data->name('group')->value($Group), 
+					    SOAP::Data->name('where')->value($where));
+  } else {
+    $soapRes = $conn->list_machines(SOAP::Data->name('where')->value($where))
+  }
+
+  if ($soapRes->fault) {
+    print $soapRes->faultdetail;
+  } else {
+    my @res = $soapRes->paramsall;
+
+    undef $soapRes;
+
+    foreach my $ref (@res) {
+      my $map = makemap($ref->[0]);
+      shift @$ref;
+
+      print "Columns available: ".join(', ', sort keys %$map)."\n";
+      foreach my $host (@$ref) {
+	print "\nNetreg ID: ".$host->[$map->{'machine.id'}];
+	print "\nHostname: ".$host->[$map->{'machine.host_name'}];
+	print "\nIP: ".long2dot($host->[$map->{'machine.ip_address'}]);
+	print "\nMode: ".$host->[$map->{'machine.mode'}];
+	print "\nMac: ".$host->[$map->{'machine.mac_address'}]."\n\n";
+	
+	my $ownerRes = $conn->list_protections(SOAP::Data->name('table')->value('machine'),
+				SOAP::Data->name('row')->value($host->[$map->{'machine.id'}]));
+
+	#print Data::Dumper->Dump([$ownerRes->paramsall], ['owner result']);
+	foreach my $ent (@{$ownerRes->paramsall}) {
+	    print "$ent->[0] : $ent->[1] : $ent->[2] : $ent->[3]\n";
+	}
+      }
+    }
+  }
+
+
+}
+
+sub usage {
+  print "NetReg Host Search\n\n";
+  print "Search netreg for hosts with the following criteria (pick one):\n";
+  print "\t--ip <IP address>\n";
+  print "\t--hn <Hostname>\n";
+  print "\t--mac <MAC Addr>\n";
+  print "\nOther commands:\n";
+  print "\t--user <user name> (Find machines owned by user)\n";
+  print "\t--group <group name> (Find machines owned by group)\n";
+  print "\t--regexp   Use SQL wildcards instead of looking for an exact match\n";
+  print "\t--server <server name> (Use NetReg SOAP server on this server)\n";
+  print "\t--kx509 (Use kx509 to get a certificate for authentication)\n";
+}
+
+sub END {
+  if ($kx509) {
+    unlink "$ENV{KRB5CCNAME}-$$.crt";
+  }
+}

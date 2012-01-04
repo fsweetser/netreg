@@ -1,0 +1,29 @@
+<p><a name="outlet.flags"></a><a name="machine.flags"></a><b>flags
+-</b> Flags are administrative bits that can be set to denote
+something special about a particular outlet or machine.
+
+<ul>
+  <li>Abuse: the abuse flags prevents the outlet/machine from being
+      modified by anyone except network administrators.
+  </li>
+  <li>Suspend: similar to abuse, except the outlet/machine actually
+      gets suspended.  Outlets will get deactivated at the device they
+      are connected to.  Machines will no longer propagate to DNS and
+      DHCP servers.
+  </li>
+  <li>Permanent: some cables are permanently attached to specific
+      network devices, and the specific ports are enabled/disabled
+      as needed.  Redidence connections are all permanent, and 
+      many lecture halls and classrooms have permanent connections. 
+  </li>
+  <li>Activated: a user has registered the outlet for use, either by
+      paying for an academic/administrative activation, or by 
+      registering a machine to a permanant connection.
+  </li>
+</ul>
+</p>
+
+
+<!-- 
+$Id: outlet.flags.html,v 1.2 2008/03/27 19:42:19 vitroth Exp $
+-->

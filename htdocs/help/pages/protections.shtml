@@ -1,0 +1,142 @@
+<!--#include file="header.html" -->
+<!--#include file="sidebar.html" -->
+<p class="c5">Setting Protections</p>
+
+<p>If you maintain machine and/or outlet registrations for other
+users, or if someone else maintains machine and/or outlet
+registrations for you, you can add or change the list of people who
+can view and edit the information and options for the machines and
+outlets to which you have access.</p>
+
+<p>To view, edit or change the list of people with access to your
+information, click on the <b>[View/Update Protections]</b> link at
+the top of the Machine Information page (for machines) or the
+Outlet Information page (for outlets).</p>
+
+<p><a name="owners"></a><b>Identifying Machine and Outlet
+Users</b></p>
+
+<p>When you register an outlet or machine, your user ID is listed
+in the Protections list as one of the identities with access to the
+data. That's fine if you're registering the machine or outlet for
+yourself, but if you're registering it for another user, you should
+add that user to the protections list to associate them with the
+machine or outlet as described in <a href="#adduser">Adding a
+User</a>.</p>
+
+<p>Additionally, if you are maintaining machine and outlet data for
+other users, you most likely are a member of a group that has
+access to the data. In that case, you can remove your user ID from
+the protections list as described in <a href="#delete">Deleting a
+User or Group</a>, Since you are a member of the group with access
+to the data, you will still be able to update it in the future.</p>
+
+<p><b class="c6">WARNING!</b> If you delete your user ID from the
+Protections list and either you are not a member of the group that
+has access or you also delete the group, you will not be able to
+view or edit the record later.</p>
+
+<a name="prot_s3_record"></a>
+<p><a name="rights"></a><b>Editing User/Group Rights</b></p>
+
+<p>The Protections table on the View Protections page lists the
+users and groups who have access to the information for the machine
+or outlet. The following fields are listed for each user or group
+(click on a field name for a description):</p>
+
+<ul>
+  <li><a href="../definitions/protections.identity.shtml" target=
+      "_blank">Identity</a></li>
+
+<li><a href="../definitions/protections.rights.shtml"
+    target="_blank">Rights</a> (<a href="../definitions/readaccess.shtml"
+    target="_blank">Read</a> and <a href= "../definitions/writeaccess.shtml"
+target="_blank">Write</a>)</li>
+
+</ul>
+
+<p>To change the rights for a user or group, select the Level and
+check the rights that you want to give the user or group, then
+click on the Update button.</p>
+
+<p><a name="adduser"></a><b>Adding a User</b></p>
+
+<p>If you want to give a specific user the ability to view, update
+or add protections to the machine or outlet, do the following:</p>
+
+<ol>
+<li>Under <b>Add user/group to protections</b>, enter the user's
+email address (or system ID) in the Identity field. For example:
+<pre>ju33@example.edu</pre><br>
+<br>
+</li>
+
+<li>Select the <a href="../definitions/protections.rlevel.shtml" target=
+"_blank">level</a> of authorization you want to give this user from
+the pull-down menu under Level.<br>
+<br>
+</li>
+
+<li>Place a checkmark in the checkboxes for the <a href=
+"../definitions/protections.rights.shtml" target="_blank">rights</a> that you want to
+give the user 
+<br>
+</li>
+
+<li>Click on the Add Protection button.<br>
+<br>
+ If you've entered a valid user ID, the Protections page will be
+redisplayed and the user will be listed in the Protections
+table.<br>
+<br>
+</li>
+</ol>
+
+<p><a name="addgroup"></a><b>Adding a Group</b></p>
+
+<p>If you want to give a group the ability to view, update or add
+protections to the machine or outlet, do the following:</p>
+
+<ol>
+<li>Under <b>Add user/group to protections</b>, enter the group ID
+in the Identity field. <br>
+<br>
+</li>
+
+<li>Select the <a href="../definitions/protections.rlevel.shtml" target=
+"_blank">level</a> of authorization you want to give this group
+from the pull-down menu under Level.<br>
+<br>
+</li>
+
+<li>Place a checkmark in the checkboxes for the <a href=
+"../definitions/protections.rights.shtml" target="_blank">rights</a> that you want to
+give the group. 
+<br>
+</li>
+
+<li>Click on the Add Protection button.<br>
+<br>
+ If you've entered a valid group ID, the Protections page will be
+redisplayed and the group will be listed in the Protections
+table.<br>
+<br>
+</li>
+</ol>
+
+<p><a name="delete"></a><b>Deleting a User or Group</b></p>
+
+<p>If you no longer want a particular user or group to have access
+to the machine or outlet data, click on the Delete link in the
+Protections table. The user or group will be removed from the
+table.</p>
+
+<p><b class="c6">WARNING!</b> If you delete your own ID from the
+protections, and you are not a member of any of the groups listed,
+you will no longer have access to the machine or outlet
+information.</p>
+
+<!--#include file="footer.html" -->
+<!-- 
+$Id: protections.shtml,v 1.8 2008/03/27 19:42:28 vitroth Exp $
+-->

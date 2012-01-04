@@ -1,0 +1,291 @@
+<group DEFAULT>
+  <translate>
+    pattern :
+    replacement :qatar:
+  </translate>
+</group>
+
+
+#local:cs group exists in netreg-q by accident.  ignore it
+<group local:cs>
+    action ignore
+</group>
+
+
+<dns_zone DEFAULT>
+    accept_pattern (local)|(qatar\.cmu\.(edu|local))|(cmuq\.(net|local|org))|(qatar.webiso.andrew.cmu.edu)|(qatar.win.cmu.(edu|local))|(qatar-test.win.cmu.edu)|(heritageofqatar.org)|(gallew.org)|(86.in-addr.arpa)|(172.in-addr.arpa)|(168.192.in-addr.arpa)|(10.in-addr.arpa)|(51.72.in-addr.arpa)|(254.169.in-addr.arpa)
+    reject_pattern (\d+\.\d+\.\d+\.\d+\.in-addr\.arpa)
+</dns_zone>
+
+<dns_zone LOCAL>
+    action lookup
+</dns_zone>
+
+<dns_zone CMUQ.ORG>
+    action override
+</dns_zone>
+
+<dns_zone CMUQ.NET>
+    action override
+</dns_zone>
+
+<dns_zone SW.CMUQ.NET>
+    action override
+</dns_zone>
+
+<dns_zone WP.CMUQ.NET>
+    action override
+</dns_zone>
+
+<dns_zone GW.CMUQ.NET>
+    action override
+</dns_zone>
+
+<dns_zone CON.CMUQ.NET>
+    action override
+</dns_zone>
+
+<dns_zone QATAR.CMU.EDU>
+    action override
+</dns_zone>
+
+<dns_zone QATAR.WIN.CMU.EDU>
+    action override
+</dns_zone>
+
+<dns_zone QATAR-TEST.WIN.CMU.EDU>
+    action override
+</dns_zone>
+
+<dns_zone QATAR.WEBISO.ANDREW.CMU.EDU>
+    action override
+</dns_zone>
+
+<dns_zone 10.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 254.169.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 17.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 18.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 19.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 20.172.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 0.20.172.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 21.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 22.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 23.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 24.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 25.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 26.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 27.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 28.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 29.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 30.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 31.172.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 168.192.IN-ADDR.ARPA>
+    action lookup
+</dns_zone>
+
+<dns_zone 32.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 33.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 34.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 35.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 36.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 37.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 38.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 39.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 40.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 41.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 42.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 43.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 44.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 45.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 46.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone 47.36.86.IN-ADDR.ARPA>
+    action override
+</dns_zone>
+
+<dns_zone QATAR.CMU.LOCAL>
+    action override
+</dns_zone>
+
+<dns_zone QATAR.WIN.CMU.LOCAL>
+    action override
+</dns_zone>
+
+<machine NETSAGE.ANDREW.CMU.EDU>
+  action ignore
+</machine>
+
+<machine ANS3.QATAR.CMU.EDU>
+  action override
+</action>
+
+<machine Q-SMTP4.QATAR.CMU.EDU>
+  action override
+</machine>
+
+<machine ANS4.QATAR.CMU.EDU>
+  action override
+</machine>
+
+<machine Q-MX4.QATAR.CMU.EDU>
+  action override
+</machine>
+
+<machine WEB4.QATAR.CMU.EDU>
+  action override
+</machine>
+
+<machine WEBMAIL5.QATAR.CMU.EDU>
+  action override
+</machine>
+
+<machine WEBISO3.QATAR.CMU.EDU>
+  action override
+</machine>
+
+<machine T-NS1.NET.CMU.EDU>
+  action lookup
+</machine>
+
+<machine T-NS2.NET.CMU.EDU>
+  action lookup
+</machine>
+
+
+
+<subnet CMUP>
+    action ignore
+</subnet>
+
+<subnet A100_Machine_Room_Network_-_Qatar_Systems_Internal>
+    action ignore
+</subnet>
+
+
+<subnet DEFAULT>
+    prefix "Qatar - "
+    abbr_prefix q-
+    overlap_action overwrite
+</subnet>
+
+<vlan DEFAULT>
+    prefix "Qatar - "
+    abbr_prefix q-
+    overlap_action overwrite
+</vlan>
+
+<service DEFAULT>
+    prefix "QATAR-"
+</service>
+
+<service netsage>
+    action ignore
+</service>
+
+<global_settings>
+ <dhcp_option>
+   next-server import
+   domain-name import
+   time-servers import
+   ntp-servers import
+   domain-name-servers import
+ </dhcp_option>
+</global_settings>

@@ -1,0 +1,108 @@
+## General TODO list
+## $Id: general.TODO,v 1.9 2008/03/27 19:42:15 vitroth Exp $
+##
+
+# Note that this is mostly deprecated; we are using a bugzilla
+# tracking database - bugzilla.andrew.cmu.edu
+# It is here mostly because it documents a few components
+# for the developers.
+
+X make sure API functions that returns associative arrays return {} when
+  blank instead of [] (similarly for regular arrays)
+- make all ADD functions do warns and make functions use warns more - like
+  add_machine
+- cleanup calls to get_{add|read|write}_level to use the proper tid
+- cascade delete stuff from delete_machine
+
+- cleanup schema CHAR(*) sizes - dns_resource.text0 -> make larger?
+
+- check calls to db_connect for failure and embed the password
+
+X upgrade to mysql 2.3 ?  
+X   - SELECT COUNT(DISTINCT ...)
+X   - SELECT 1 & ~5
+
+- fix adding CNAMEs to machines on first machine load
+
+- $q->param('foo', 'xx') on page reloads - esp like mach_view checkboxes
+
+- policy for deleting machines (marked ABUSE / SUSPEND ? )
+
+- make sure the semantics for dealing with identity 0 (ie system:anyuser)
+are well defined
+
+- change all view functions to use the _printable arrays
+
+- fix all add,delete,modify in API to use 2-level return
+
+- security review: review all $q->param's for validity.
+
+- mysql my-large.cnf (to /etc/my.conf ?)
+
+- make sure user has ADD permission for dhcp_options and dns_resources
+
+- fix machine expiration stuff
+
+- protections for subnets (ie, able to add ADD rights to subnets when
+  adding the subnet, remove when deleted, etc.)
+
+- add support for 'base' machine.mode
+
+- verify all foreign key checks w/ GET
+
+- update all delete_ WebInt functions to have valid opcodes for the "No, go back to ..." choice
+#########################################################################
+##### Information about machine MAC/IP/Host
+
+Facts:
+ ## IP ##
+  -  All IPS must be unique except 00
+ ## MAC ##
+  - MACs must be unique if dynamic, except 00
+  - if ALL static, MACS may be duped on different subnet shares, except 00
+ ## Hostname ##
+  - Host must be unique if dynamic, pool, res, broadcast
+  - Host may be duped on diff share iff ALL not dynamic
+  - Host may be duped on same if all MACs other than the first are 00
+ 
+Validation:
+ ## IP ##
+  - clear if L1
+  - 0 if dynamic
+  - error if blank & (pool or broadcast)
+  - verify broadcast if broadcast
+  :: valid
+  * LOCK
+    - verify (unique & ip matches subnet)/ assign
+
+ ## MAC ##
+   if dynamic
+  	verify unique / not 00
+   if static
+     if '' return error
+     if not 0
+ 	find dups:
+	  - same mac/diff share
+	  - same mac/dynamic
+     else
+	punt
+   otherwise
+     set to ''
+   :: valid
+
+## Host ##
+   :: valid
+   - must be allowed on the subnet
+   - verify unique if not static
+   if static
+	OK if unique
+	OK if unique on subnet share
+	OK if mac == 00 and user matches
+
+## Validity ##
+ IP: DQ or ''
+ MAC: Valid MAC or ''
+ Host: must meet host def (NOT '')
+
+## extra access query:
+select identity, groups.id, users.id, rights, rlevel, tname, tid from protections left join users on users.id = protections.identity left join groups on identity = groups.id * -1, memberships where tname != 'machine' AND tname != 'outlet' AND FIND_IN_SET('READ', rights) and identity != 0 and (users.id = 19111 or (memberships.gid = groups.id and memberships.uid = 19111));

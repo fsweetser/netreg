@@ -1,0 +1,152 @@
+<!--#include file="header.html" -->
+<!--#include file="sidebar.html" -->
+<p class="c5">Registering an Outlet</p>
+
+<p>Unless you are using Wireless to connect to the
+network, your machine must be connected to a registered outlet to
+gain access to the network.</p>
+
+<p>The outlet does not necessarily need to be registered by you. If
+the outlet is already registered by someone else and you will be
+using a hub to connect your machine to it, or if someone else in
+your department has already registered the outlet, you should be
+able to connect your machine as long as the machine is properly
+registered.</p>
+
+<p>However, if the outlet is not registered, click on <b>[Register
+New Outlet]</b> on the Main page of the Network Registration System
+to register it.</p>
+
+<h3><a name="outlets_reg_s0"></a>Step 1. Selecting the Location</h3>
+
+<p>The first page displayed when registering an outlet asks you to
+either identify the building in which the outlet is located, or to
+identify the outlet specifically.</p>
+
+<p><b>By Building<br>
+</b>Generally, it is best to identify the outlet specifically, if
+you can, but you can identify the outlet by building and room
+number if there is a problem reading the From: and To: values on
+the outlet itself.</p>
+
+<p>To identify an outlet by building, select your building from the
+Building drop-down menu, then click on the Continue button to the
+right of it.</p>
+
+<p>A list of outlets within that room will be displayed by room
+number.</p>
+
+<p><b>By Outlet<br>
+</b>If you have access to the outlet that you are registering and
+you can read the From: and To: numbers on the wallplate, it is best
+to simply enter them on this page.</p>
+
+<p>Look on the wallplate for the outlet you want to use for two
+numbers that look like this:<br>
+<br>
+<tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;13@01-342-C4<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;13@01-@F055<br>
+</tt><br>
+</p>
+
+<p>Enter the top number in the "From:" field and the bottom number
+in the "To:" field, then click on the Continue button to the right
+of the fields.<br>
+<br>
+<b>NOTE:</b> If you can make out only one of the numbers, enter it
+in the appropriate field then click on the Continue button. If you
+can make out only the first part (before the dash) of one of the
+numbers, enter that and a list of outlets beginning with that
+number will be displayed.<br>
+<br>
+</p>
+
+<p>If the outlet numbers you entered were valid, the Select and
+Outlet page will be displayed listing the outlet and its current
+status. If their are no outlets listed, use the Back button in your
+browser to go back to the page to select a building or outlet
+number.<br>
+<br>
+</p>
+
+<a name="outlets_reg_s1_building"></a><a name="outlets_reg_s1_tofrom"></a>
+<h3>Step 2: Selecting an Outlet by Room</h3>
+
+<p>When you select a building or enter a valid outlet number, the
+outlets for that building (or a single outlet if you entered a
+complete, valid outlet number) will be displayed.</p>
+
+<ol>
+<li>Page through the list, if necessary, to find your room number.
+If only one outlet is listed, verify that the room number is
+correct.<br>
+<br>
+</li>
+
+<li>If the value in the Activate column for an outlet is "Already
+Activated" you should be able to connect your machine to the outlet
+and use it. If the value is an "Activate" hyperlink, click on
+"Activate" to select that outlet and continue with the
+registration.<br>
+<br>
+</li>
+</ol>
+
+<p><b>If there is more than one outlet for your room number,</b>
+verify which outlet to use by checking the From: and To: values on
+the wallplate. If, for whatever reason, you cannot see the numbers
+on the wallplate, contact your help desk for assistance.
+
+<h3><a name="outlets_reg_s2"></a>Step 3: Entering Outlet
+Information</h3>
+
+<p>Once you have identified the outlet you want to register, the
+outlet information page is displayed. You need to enter the
+information on this page so that the outlet can be activated
+properly.</p>
+
+<p>Complete the following fields on this page (click on a field
+name for a description):</p>
+
+<ul>
+<li><a href="../definitions/outlet.type.shtml" target=
+"_blank">Type</a></li>
+
+<li><a href="../definitions/department.shtml" target=
+"_blank">Affiliation<br>
+<br>
+</a></li>
+</ul>
+
+<h3><a name="protections"></a>Step 4: Setting Protections</h3>
+
+<p>If you maintain outlet registrations for other users, a
+Protections section will be displayed on the Outlet Information
+page. Your user ID will be listed with Read and Write access
+checked by default. Any groups of which you are a member will also
+be listed with no access rights checked by default.</p>
+
+<p>If you are registering this outlet for another user, you might
+want to uncheck the Read and Write rights for yourself and,
+instead, give Read and Write access to the group of which you are a
+member. That way, your User ID will not be associated directly with
+the outlet.</p>
+
+<p>If you are registering the outlet for another user, you might
+also want to edit the outlet after you've registered it and add the
+user who will be using the outlet to the protections list. See <a
+href="protections.shtml">Setting Protections</a> for more
+information.</p>
+
+<h3><a name="submit-reg"></a>Step 5: Submit the Registration</h3>
+
+<p>When you have completed all fields on the Machine Information
+page, click on the Continue button to submit the registration
+request. If there are no problems with the values you entered, your
+registration request will be submitted and you should be able to
+access the network with the registered machine within two
+hours.</p>
+<!--#include file="footer.html" -->
+<!-- 
+$Id: outlet-reg.shtml,v 1.6 2008/03/27 19:42:28 vitroth Exp $
+-->

@@ -1,0 +1,109 @@
+<!--#include virtual="/help/pages/header.html" -->
+<!--#include virtual="/help/pages/sidebar.html" -->
+<p class="c5">Finding Your Hardware Address</p>
+
+<p>Each network device (ethernet card) has a unique hardware
+"address" that identifies it on the network. You'll need to
+determine the hardware address for your Ethernet card to register
+your machine.</p>
+
+<p>The hardware address, (sometimes called MAC address or ethernet
+address) is a 12-digit hexidecimal number (which means it can
+contain the letters A through F in addition to numerals) that
+uniquely identifies it. An example of a hardware address is
+00E02938A48C. Often, the hardware address is shown on the card
+itself, but you can also determine the address from your <a href=
+"#win9598">Windows 95/98</a>, <a href="#winnt00">Windows
+NT/2000</a>, <a href="#winXP">Windows
+XP</a>, or <a href="#mac">Macintosh</a>.</p>
+
+<h3><a name="win9598"></a>Windows 95/98 Machines</h3>
+
+<p>Follow these steps to determine your Ethernet hardware
+address.</p>
+
+<ol>
+<li>Click on the Start button, then select Run.<br>
+<br>
+</li>
+
+<li>In the dialog box type <b>winipcfg</b> and press OK.<br>
+<br>
+ If a message dialog box appears stating that winipcfg could not be
+found, you probably need to install the TCP/IP networking component
+which contains the winipcfg program.<br>
+<br>
+</li>
+
+<li>If you also have a modem installed, make sure the pull-down
+list for the first item is set to your Ethernet Adapter and not PPP
+Adapter.<br>
+<br>
+</li>
+
+<li>Write down the number that appears in the Adapter Address
+field. This 12 digit alpha/numberic combination is your Ethernet
+hardware address.<br>
+<br>
+</li>
+</ol>
+
+<h3><a name="winnt00"></a>Windows NT/2000 Machines</h3>
+
+<ol>
+<li>Click on the Start button, then select Programs, then
+Accessories. folder.<br>
+<br>
+</li>
+
+<li>Select the Command Prompt application.<br>
+<br>
+</li>
+
+<li>At the MS DOS prompt type <b>ipconfig/all</b> and press
+Enter.<br>
+<br>
+ If a message appears stating that IPConfig could not be found, you
+probably need to install the TCP/IP networking component, which
+contains the IPConfig program.<br>
+<br>
+</li>
+
+<li>Write down the number that appears in the Physical Address
+field. This 12 digit alpha/numberic combination is your Ethernet
+hardware address.<br>
+<br>
+</li>
+</ol>
+
+<h3><a name="winXP"></a>Windows XP Machines</h3>
+
+<ol>
+<li>Select Start &gt; All Programs &gt; Accessories &gt; Command Prompt</li>
+
+<li>At the MS DOS prompt type <b>ipconfig /all</b> and press Enter.<br />
+<i>If a message dialog box appears stating that ipconfig could not be
+found, you probably need to install the TCP/IP networking component,
+which contains the ipconfig program.</i></li>
+<li>Write down the number that appears in the Physical Address
+field. This 12 digit alpha/numberic combination is your Ethernet
+hardware address.</li>
+</ol>
+
+<h3><a name="mac"></a>Mac OS X 10.4 and 10.3 Machines</h3>
+<ol>
+<li>Select Apple &gt; System Preferences.</li>
+
+<li>Click the Network icon.</li>
+<li>From the Show drop-down list, select Built-in Ethernet.</li>
+<li>Select the Ethernet tab.</li>
+<li>Write down the number that appears in the Physical Address
+field. This 12 digit alpha/numberic combination is your Ethernet
+hardware address.<br>
+</ol>
+
+
+<!--#include virtual="/help/pages/footer.html" -->
+<!-- 
+$Id: hardwareaddress.shtml,v 1.6 2008/03/27 19:42:33 vitroth Exp $
+-->

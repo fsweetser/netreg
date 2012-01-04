@@ -1,0 +1,50 @@
+<!--#include file="header.html" -->
+<!--#include file="sidebar.html" -->
+
+<p class="c5">Building Admin</p>
+
+<p>Buildings have several characteristics that are maintained in the
+      NetReg System.  This section of the interface allows you to
+      manage that information.  </p> 
+
+<A name="build_list"></A><h3>List of Buildings</h3>
+
+<p>This section displays a list of all buildings in the database.  The
+      list can be sorted by either the building name or the building
+      abbreviation.  Navigation through the list is done using the
+      "[First Page]", "[Next Page]", "[Last Page]" and number links at
+      the top of the list.  To locate a building by building number,
+      you can use the "[Search Buildings]" link.  To add new buildings
+      to the database, use the "[Add Building]" link.</p> 
+
+<A name="build_search"></A><h3>Search Building</h3>
+
+<p>This form is used to locate building information when the building
+      cannot be easily located in the "List of Buildings."  Typical
+      searches include using "dorm" in the name field to get a list of
+      all dormitories or searching by building number.</p> 
+
+<A name="build_view"></A><h3>Building Information</h3>
+
+<p>This form is used to view and update the information about a
+specific building, the fields that can be viewed and/or updated in
+this form are</p> 
+
+<ul>	<li><a target=_blank href="/help/definitions/building.name.shtml#building.name">Building Name</a></li>
+	<li><a target=_blank href="/help/definitions/building.abbreviation.shtml#building.abbreviation">Building Abbreviation</a></li>
+	<li><a target=_blank href="/help/definitions/building.number.shtml#building.number">Building Number<a></li>
+</ul>
+
+<A name="subnet_presence"></A><h3>Subnets in Building</h3>
+
+<p>The inclusion of a subnet in this list causes that subnet to be
+available for selection by users activating outlets in the building
+listed in the "Building Information" section.  To add a new subnet,
+select it in the pull-down menu and then click the "Add Subnet"
+Button.  To remove a subnet from a building, click the delete link
+following the subnet name you want to delete.</p> 
+
+<!--#include file="footer.html" -->
+<!-- 
+$Id: build_list.shtml,v 1.4 2008/03/27 19:42:24 vitroth Exp $
+-->

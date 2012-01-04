@@ -1,0 +1,4 @@
+<!--#include virtual="../pages/header.html" -->
+<!--#include virtual="../pages/sidebar.html" -->
+<!--#include file="dns_server.control.html" -->
+<!--#include virtual="../pages/footer.html" -->

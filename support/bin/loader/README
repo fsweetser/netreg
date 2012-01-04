@@ -1,0 +1,4 @@
+$Id: README,v 1.2 2008/03/27 19:42:44 vitroth Exp $
+
+The scripts here were used in the initial data load; they may be useful
+in bulk loading of data but are pretty custom to our environment.

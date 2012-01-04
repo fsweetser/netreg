@@ -1,0 +1,58 @@
+<!--#include file="header.html" -->
+<!--#include file="sidebar.html" -->
+<a name="outlets_search"></a>
+<p class="c5">Searching Outlets</p>
+
+<p>If you have a large number of outlets registered, or if you are
+a member of a group that has access to a large number of outlet
+registrations, you may want to search for a particular outlet to
+view or edit rather than wade through the list to find it.</p>
+
+<p>To search for machines matching some criteria:</p>
+
+<ol>
+<li>Click on the <b>[Search Outlets]</b> link at the top of the
+Registered Outlets table on the Main page.<br>
+<br>
+ The Search Outlets page is displayed.<br>
+<br>
+</li>
+
+<li>Enter your search criteria in the fields shown. Note that only
+outlets matching ALL of the criteria you enter will be found.<br>
+<br>
+ The following fields are available:<br>
+<br>
+ <a href="../definitions/outlet.type.shtml" target="_blank">Type</a><br>
+ <a href="../definitions/outlet.cable.shtml" target="_blank">Cable</a><br>
+ <a href="../definitions/outlet.device.shtml" target="_blank">Device</a><br>
+ <a href="../definitions/outlet.port.shtml" target="_blank">Port</a><br>
+ <a href="../definitions/outlet.attributes.shtml" target=
+"_blank">Attributes</a><br>
+ <a href="../definitions/outlet.flags.shtml" target="_blank">Flags</a><br>
+ <a href="../definitions/outlet.status.shtml" target=
+"_blank">Status</a><br>
+ <a href="../definitions/user.shtml" target="_blank">User</a>/<a href=
+"../definitions/group.shtml" target="_blank">Group</a>/<a href=
+"../definitions/department.shtml">Affiliation</a><br>
+<br>
+</li>
+
+<li>Click on the Search button.<br>
+<br>
+ The outlets matching all of the criteria you entered will be
+displayed.<br>
+<br>
+</li>
+
+<li>Click on an ID in the Search Results page to view/update
+information for that outlet.<br>
+<br>
+ If no outlets, or too many outlets, are listed in the search
+results, use your browser's Back button to return to the Search
+Outlets page and enter new criteria.</li>
+</ol>
+<!--#include file="footer.html" -->
+<!-- 
+$Id: outlets_search.shtml,v 1.7 2008/03/27 19:42:28 vitroth Exp $
+-->

@@ -1,0 +1,7 @@
+<!--#include virtual="../pages/header.html" -->
+<!--#include virtual="../pages/sidebar.html" -->
+<!--#include file="next-server.html" -->
+<!--#include virtual="../pages/footer.html" -->
+<!-- 
+$Id: next-server.shtml,v 1.2 2008/03/27 19:42:19 vitroth Exp $
+-->

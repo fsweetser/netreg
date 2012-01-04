@@ -1,0 +1,23 @@
+<dns_zone net.cmu.edu>
+  machines no
+  keys no
+</dns_zone>
+
+# <dns_zone cmu.edu>
+#   machines no
+#   keys no
+# </dns_zone>
+
+<subnet Network Development>
+   machines no
+   dns_zones no
+</subnet>
+
+# <subnet 128.2.10.0/23>
+#   machines yes
+#   dns_zones no
+# </subnet>
+
+# <group netreg:%/>
+
+#<vlan Network Development/>

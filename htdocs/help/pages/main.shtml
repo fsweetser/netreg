@@ -1,0 +1,130 @@
+<!--#include file="header.html" -->
+<!--#include file="sidebar.html" -->
+<p class="c5">Using the Main Page</p>
+
+<p>When you logon to the Network Registration System, you are first
+presented with a list of machines and outlets that you have
+registered. You can select whether to view machines and outlets for
+you or for a group that you administer. From this page you can,
+view or edit machines and outlets already registered or register
+new machines and outlets.</p>
+
+<p>You can also sort the lists or search for machines and outlets
+that match certain criteria (see <a href=
+"machine-search.html">Searching Machines</a> and <a href=
+"outlet-search.html">Searching Outlets</a>).</p>
+
+<p>You can always return to the Main page by clicking on
+<b>[Main]</b> at the top of any page in the system.</p>
+
+<h3><a name="user-group"></a>Selecting a User or Group</h3>
+
+<p>At the top of the page is a line that begins "<b>Registered
+machines and outlets for</b>:" If you have access to view or
+administrate machine and outlet registrations for another user,
+this line will be followed by a drop-down list of the groups or
+users that you have access to adminstrate.</p>
+
+<p>To view the machines and outlets for a user or group, select the
+user ID or group name from the drop-down list, then click on the
+<b>Refresh</b> button.</p>
+
+<h3><a name="machine"></a>Viewing Machines</h3>
+
+<p>The first table on the Main page is a list of machines
+registered for you or for the group selected at the top of the
+page. For each machine, the following are listed:</p>
+
+<ul>
+<li><a href="../definitions/host_name.shtml" target=
+"_blank">Hostname</a></li>
+
+<li><a href="../definitions/mac_address.shtml" target=
+"_blank">Hardware Address</a></li>
+
+<li><a href="../definitions/mode.shtml" target="_blank">Mode</a></li>
+
+<li><a href="../definitions/ip_address.shtml" target="_blank">IP
+Address</a></li>
+
+<li><a href="../definitions/ip_address_subnet.shtml" target="_blank">Subnet</a><br>
+<br>
+</li>
+</ul>
+
+<p><b>Editing a Machine<br>
+</b>To edit the registration information for a machine, click on
+the hostname of the machine and follow the instructions in <a href=
+"mach_view.shtml">Editing a Machine</a>.</p>
+
+<p><b>Registering a Machine<br>
+</b>To register a new machine, click on the <b>[Register New
+Machine]</b> link and follow the instructions in <a href=
+"machine-reg.shtml">Registering a Machine</a>.</p>
+
+<p><b>Searching Machines<br>
+</b>If you have a large number of machines in your list, you can
+search for machines by clicking on the <b>[Search Machines]</b>
+link and following the instructions in <a href=
+"mach_search.shtml">Searching Machines</a>.</p>
+
+<p>&nbsp;</p>
+
+<h3><a name="outlet"></a>Viewing Outlets</h3>
+
+<p>The second table on the Main page is a list of outlets
+registered for you or for the group selected at the top of the
+page. For each outlet, the following are listed:</p>
+
+<ul>
+<li><a href="../definitions/from.shtml" target="_blank">From</a></li>
+
+<li><a href="../definitions/to.shtml" target="_blank">To</a></li>
+
+<li><a href="../definitions/outlet.type.shtml" target=
+"_blank">Type</a></li>
+
+<li><a href="../definitions/cable.to_building.shtml" target=
+"_blank">Building</a></li>
+
+<li><a href="../definitions/cable.to_room_number.shtml" target="_blank">Room
+Number</a><br>
+<br>
+</li>
+</ul>
+
+<p><b>Editing an Outlet<br>
+</b>To edit the registration information for an outlet, click on
+the "From" field for the cable and follow the instructions in <a
+href="outlet-edit.html">Editing an Outlet</a>.</p>
+
+<p><b>Registering a Machine<br>
+</b>To register a new outlet, click on the <b>[Register New
+Outlet]</b> link and follow the instructions in <a href=
+"outlet-reg.html">Registering an Outlet</a>.</p>
+
+<p><b>Searching Machines<br>
+</b>If you have a large number of outlets in your list, you can
+search for machines by clicking on the <b>[Search Machines]</b>
+link and following the instructions in <a href=
+"outlet-search.html">Searching Machines</a>.</p>
+
+<p>&nbsp;</p>
+
+<h3><a name="signoff"></a>Signing Off</h3>
+
+<p>When you login to the Network Registration System, a "cookie" is
+used to identify you to the server for a period of time. If you are
+using a computer that is used by others (such as a machine in a
+computing cluster) logging off through KClient will not destroy the
+cookie, and so another user may be able to view and edit your
+registration information for a short period of time after you have
+logged off.</p>
+
+<p>To avoid the potential for this problem, click on the
+<b>[Signoff]</b> link to destroy the cookie on the computer you are
+using.</p>
+<!--#include file="footer.html" -->
+<!-- 
+$Id: main.shtml,v 1.9 2008/03/27 19:42:27 vitroth Exp $
+-->

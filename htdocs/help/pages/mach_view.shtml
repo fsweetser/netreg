@@ -1,0 +1,221 @@
+<!--#include file="header.html" -->
+<!--#include file="sidebar.html" -->
+<p class="c5">Editing a Machine</p>
+
+<p>There may be times when you want to change the attributes of a
+machine that is already registered. If you change the network
+adapter (ethernet card) for a machine, you need to update the
+hardware address so that the machine can be identified with the new
+card. You need change the location if you move to a new office that
+is in a different building or even on a different subnet within the
+same building.</p>
+
+<p>To edit information for a machine, click on the machine's
+hostname in the Registered Machines table on the Main page.</p>
+
+<h3><a name="mach_view"></a>Editing Basic Information</h3>
+
+<p>On the Machine Information page, you can change the information
+that was supplied when the machine was registered. To edit the
+basic information for a machine:</p>
+
+<ol>
+<li>Type or select the new value in the field you want to
+change.<br />
+<br />
+</li>
+
+<li>Click on the Update button.<br />
+<br />
+</li>
+
+<li>The Machine Information page will be redisplayed with a
+confirmation that the machine has been updated.<br />
+<br />
+</li>
+</ol>
+
+<p>You can edit the following fields on the Machine Information
+page:</p>
+
+<ul>
+<li><a href="../definitions/host_name.shtml" target=
+"_blank">Hostname</a></li>
+
+<li><a href="../definitions/mac_address.shtml" target=
+"_blank">Hardware Address</a></li>
+
+<li><a href="../definitions/ip_address_subnet.shtml" target="_blank">Subnet</a></li>
+
+<li><a href="../definitions/mode.shtml" target="_blank">Mode</a></li>
+
+<li><a href="../definitions/department.shtml" target=
+"_blank">Affiliation<br />
+<br />
+</a></li>
+</ul>
+
+<p>Also, if you have selected "static" for your IP address mode,
+you will see the IP address assigned to your machine. You cannot
+edit the IP Address field.</p>
+
+<h3><a name="protections"></a>Setting Protections</h3>
+
+<p>You can add or change the list of people who can view and edit
+your machine information and options. To view, edit or change the
+list of people with access to your information, click on the
+<b>[View/Update Protections]</b> link at the top of the Machine
+Information page and see the instructions in <a href=
+"protections.shtml">Setting Protections</a>.</p>
+
+
+<h3><a name="DNS"></a>Adding DNS Resources</h3>
+
+<p>DNS Resources are additional information that is provided by the
+      DNS servers.  These are usually responces to specific additional
+      queries other than the usual "What is this host's IP address?"
+      question. 
+</p>
+
+<ol>
+<li>If the DNS Resources section is not visible on the Machine
+Information page, click on the <b>[View Advanced Options]</b> link
+at the top of the page.<br />
+<br />
+ The Machine Information page will be refreshed with the DNS
+Resources and DHCP Options sections near the bottom of the
+page.<br />
+<br />
+</li>
+<li>To add a new DNS resource, click the <b><u>Add DNS
+	    Resource</u></b> link in the <b>DNS Recources</b> title
+	bar. 
+</li><br />
+<li>Select the DNS resource type to add and click on <b>Continue</b>.
+      Possible choices are<br />
+<ul><li><a href="../definitions/mx.shtml" target="_blank">MX</a>
+</li>
+<li><a href="../definitions/cname.shtml" target="_blank">CNAME</a>
+</li>
+</ul><br />
+<li>Fill in the additional information required to compleat the record
+	and click on <b>Continue</b>.
+</li><br>
+
+<ul><li>For an MX record, you will need to provide a hostname that
+	  will handle mail sent to the current host, a Metric Number
+	  and a "Time to Live" (TTL) value.  The Metric Number is used
+	  to determine the order that multiple servers are accessed
+	  in.  A good starting value is 20. The TTL is how long the
+	  servers will continue to cache this value before looking it
+	  up again.  Leaving this value at 0 will pickup the default
+	  TTL for the domain.<br />
+	  If you are trying to set an MX record for mail sent to a
+	  third level domain (XXX.EXAMPLE.ORG) then you must contact the
+	  maintainers as this requires a modification to the zone
+	  record itself.
+</li><br />
+
+<li>For a CNAME record, you will need the the fully qualified hostname
+	that you want this machine to respond to and a "Time to Live"
+	(TTL) value.  The hostname must be in the same domain as the
+	host or the intervention of a maintainer will be required. See
+	DNS Resources, MX record (above) for explaination of TTL.
+</li>
+</ul><br />
+</ol>
+
+<h3>Deleting DNS Resources</h3>
+DNS Recources can be deleted by clicking on the <b><u>delete</u></b>
+    link corresponding to the resource to be deleted.
+
+<h3><a name="DHCP"></a>Adding DHCP Options</h3>
+
+<p>DHCP Options are additional information provided to the host at the
+      time that it requests it's IP address from the network servers.
+      These will either override or add onto the defaults that the
+      system provides for the current host.
+</p>
+
+<ol>
+<li>If the DHCP Options section is not visible on the Machine
+Information page, click on the <b>[View Advanced Options]</b> link
+at the top of the page.<br />
+<br />
+ The Machine Information page will be refreshed with the DHCP
+Options and DNS Resources sections near the bottom of the page.<br />
+<br />
+</li>
+<li>To add a new DHCP Option, click the <b><u>Add DHCP
+	    Option</u></b> link in the <b>DHCP Options</b> title
+	bar. 
+</li><br />
+<li>Select the DHCP Option type to add and click on <b>Continue</b>.
+      Possible choices are<br />
+<ul><li><a href="../definitions/filename.shtml" target="_blank">filename</a>
+</li>
+<li><a href="../definitions/next-server.shtml" target="_blank">next-server</a>
+</li>
+</ul><br />
+<li>Fill in the additional information required to compleat the record
+	and click on <b>Continue</b>.<br />
+<ul><br />
+<li>For a filename DHCP option, you must provide the tftp filename
+	    that the host will use to obtain additional configuration
+	    information and a "Time to live" value.  This filename
+	    must be contained in double quotes
+	    ("/conffiles/myconfig.conf"). See DNS Resources, MX record
+  (above) for explaination of TTL.  
+
+</li><br />
+<li>For a next-server DHCP option, you must provide the IP address of
+    the server that the host will get it's additional configuration
+    from if it is different from the DHCP server that responded to the
+    request. See DNS Resources, MX record (above) for explaination of
+    TTL. 
+</li>
+</ul>
+</li><br />
+</ol>
+
+<h3>Deleting DHCP Options</h3>
+DHCP Options can be deleted by clicking on the <b><u>delete</u></b>
+    link corresponding to the option to be deleted.
+
+<h3><a name="deleting"></a>Deleting a Machine</h3>
+
+<p>It's a good idea to delete a machine when it has been disposed
+of or, for whatever reason, the entry is no longer valid. For
+example, if a new ethernet card was purchased for the machine and,
+for some reason, a new registration entry was added with a
+different hostname (instead of updating the original registration)
+you would want to delete the old machine registration.</p>
+
+<p><b class="c6">WARNING!</b> Deleting a machine does not simply
+remove it from your machine list, it removes registration for the
+machine completely. If you delete a machine and someone else is
+using that machine, they will not be able to access the network
+after you delete the entry.</p>
+
+<p>To delete a machine...</p>
+
+<ol>
+<li>Click on the <b>[Delete Machine]</b> tab on the Machine
+Information page.<br />
+<br />
+ A confirmation page will be displayed asking if you are sure you
+want to delete the machine.<br />
+<br />
+</li>
+
+<li>Click on "Yes, delete this machine" if you really want to
+delete the machine.<br />
+<br />
+ The Main page will be displayed with a message indicating that the
+machine was deleted.</li>
+</ol>
+
+<!--#include file="footer.html" -->
+<!-- 
+$Id: mach_view.shtml,v 1.10 2008/03/27 19:42:27 vitroth Exp $
+-->

@@ -1,0 +1,7 @@
+<!--#include virtual="../pages/header.html" -->
+<!--#include virtual="../pages/sidebar.html" -->
+<!--#include file="outlet.type.html" -->
+<!--#include virtual="../pages/footer.html" -->
+<!-- 
+$Id: outlet.type.shtml,v 1.2 2008/03/27 19:42:20 vitroth Exp $
+-->

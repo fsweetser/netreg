@@ -1,0 +1,6 @@
+AuthType KWeb
+AuthName kweb
+<LIMIT GET POST>
+#require valid-user
+require user *@ANDREW.CMU.EDU
+</LIMIT>

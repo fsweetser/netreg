@@ -1,0 +1,1677 @@
+-- MySQL dump 8.21
+--
+-- Host: localhost    Database: netdb
+---------------------------------------------------------
+-- Server version	3.23.49
+
+DROP DATABASE IF EXISTS netdb;
+CREATE DATABASE netdb;
+use netdb;
+
+-- Table structure for table '_sys_changelog'
+--
+
+CREATE TABLE _sys_changelog (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  user int(10) unsigned NOT NULL default '0',
+  name char(16) NOT NULL default '',
+  time datetime default NULL,
+  info char(255) NOT NULL default '',
+  PRIMARY KEY  (id),
+  KEY index_user (user),
+  KEY index_username (name),
+  KEY index_time (time)
+) TYPE=MyISAM;
+
+--
+-- Table structure for table '_sys_changerec_col'
+--
+
+CREATE TABLE _sys_changerec_col (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  changerec_row int(10) unsigned NOT NULL default '0',
+  name varchar(255) NOT NULL default '',
+  data text,
+  previous text,
+  PRIMARY KEY  (id),
+  KEY index_record (changerec_row,name)
+) TYPE=MyISAM;
+
+--
+-- Table structure for table '_sys_changerec_row'
+--
+
+CREATE TABLE _sys_changerec_row (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  changelog int(10) unsigned NOT NULL default '0',
+  tname char(255) NOT NULL default '',
+  row int(10) unsigned NOT NULL default '0',
+  type enum('INSERT','UPDATE','DELETE') NOT NULL default 'INSERT',
+  PRIMARY KEY  (id),
+  KEY index_changelog (changelog),
+  KEY index_record (tname,row)
+) TYPE=MyISAM;
+
+
+
+--
+-- Table structure for table '_sys_dberror'
+--
+
+CREATE TABLE _sys_dberror (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  tname enum('users','groups','building','cable','outlet','outlet_type','machine','network','subnet','subnet_share','subnet_presence','subnet_domain','dhcp_option_type','dhcp_option','dns_resource_type','dns_resource','dns_zone') NOT NULL default 'users',
+  tid int(10) unsigned NOT NULL default '0',
+  errfields varchar(255) NOT NULL default '',
+  severity enum('EMERGENCY','ALERT','CRITICAL','ERROR','WARNING','NOTICE','INFO') NOT NULL default 'ERROR',
+  errtype int(10) unsigned NOT NULL default '0',
+  fixed enum('UNFIXED','FIXED') NOT NULL default 'UNFIXED',
+  comment text,
+  PRIMARY KEY  (id)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table '_sys_dberror'
+--
+
+
+
+--
+-- Table structure for table '_sys_errors'
+--
+
+CREATE TABLE _sys_errors (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  errcode smallint(6) NOT NULL default '0',
+  location varchar(64) NOT NULL default '',
+  errfields varchar(255) NOT NULL default '',
+  errtext text NOT NULL,
+  PRIMARY KEY  (id),
+  KEY index_error (errcode,location,errfields)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table '_sys_errors'
+--
+
+
+INSERT INTO _sys_errors VALUES (20000727235352,1,-4,'','','Default text');
+INSERT INTO _sys_errors VALUES (20000727235352,4,-4,'mach_reg_s0','ip_address','Default text');
+INSERT INTO _sys_errors VALUES (20000727235352,3,-4,'mach_reg_s0','','Default text');
+INSERT INTO _sys_errors VALUES (20000809202401,177,-11,'','','Please review the hi-lighted field. Our database was expecting something shorter.  If you have a question about the format, please review our help pages.');
+INSERT INTO _sys_errors VALUES (20000809202401,178,-3,'','','The user you typed does not exist in the database. Please check the spelling of the user and try again.');
+INSERT INTO _sys_errors VALUES (20000809202401,175,-16,'','ip_address','You may get this error by selecting a Dynamic IP address, then changing your computer to be a static IP address.');
+INSERT INTO _sys_errors VALUES (20000809202401,176,-33,'','','You have encountered a general system error.  This error is being reported to the appropriate people.');
+INSERT INTO _sys_errors VALUES (20000809202401,174,-16,'mach_reg_s2','','Please check that the pull-down menu is selected to your subnet.  Most often the subnet will be called by the building in which you\'re registering.  There may also be no available subnets in the building you selected - in this case, hit the back button.  If you still have problems with the subnet, please check the help files.');
+INSERT INTO _sys_errors VALUES (20000809202401,173,-16,'mach_reg_s1','','Please check that the pull-down menu is selected to your subnet.  Most often the subnet will be called by the building in which you\'re registering.  There may also be no available subnets in the building you selected - in this case, hit the back button.  If you still have problems with the subnet, please check the help files.');
+INSERT INTO _sys_errors VALUES (20000809202401,172,-16,'','','The subnet, as entered, does not exist in our database. If you are having problems with the subnet, please look at the help files.');
+INSERT INTO _sys_errors VALUES (20000809202401,171,-7,'','','The entry you are trying to changed has been changed since you viewed the original data.  Please reload the page and try again.  This is usually caused by two people attempting to alter the same data simultaneously.');
+INSERT INTO _sys_errors VALUES (20000809202401,169,0,'mach_reg_s1','subnet','You are pressing the \'continue\' button without selecting an entry from the associated list.  Please select ONE of Network, Building, or Subnet, and click the continue button next to that list.');
+INSERT INTO _sys_errors VALUES (20000809202401,167,0,'','','Please refer to the HELP guides if you are having trouble with this web form.  You may also call the Help Center at 8-HELP for further instruction.');
+INSERT INTO _sys_errors VALUES (20000809202401,168,0,'mach_reg_s1_building','building','You are pressing the \'continue\' button without selecting an entry from the building list.  Please select ONE of Network, Building, or Subnet, and click the continue button next to that list.');
+INSERT INTO _sys_errors VALUES (20000809202401,166,-29,'','','Please check the format of the hi-lighted field.  Our database was expecting a different range than what you entered.  Please check with the help documentation if you continue to have problems.');
+INSERT INTO _sys_errors VALUES (20000809202401,165,-2,'auth_remove_from_group','','You do not have the appropriate permissions to remove the user from the group.  You may wish to contact your departmental administrator, who should have the appropriate access.');
+INSERT INTO _sys_errors VALUES (20000809202401,164,-2,'auth_listgroups','','You do not have the permissions to list the group.  You may wish to contact your departmental administrator, who should have the appropriate access.');
+INSERT INTO _sys_errors VALUES (20000809202401,162,-2,'auth_add_user','','You do not have the permissions to add the user you were attempting to add.  You may wish to contact your departmental administrator, who should have the access to add the user.');
+INSERT INTO _sys_errors VALUES (20000809202401,163,-2,'auth_groupinfo','','You do not have the permissions to get the information on the group.  You may wish to contact your departmental administrator, who should have the appropriate access.');
+INSERT INTO _sys_errors VALUES (20000809202401,161,-2,'auth_add_to_group','','You do not have the permissions to add the user to the group you were attempting to add.  You may wish to contact your departmental administrator, who should have the access to add the user to the group.');
+INSERT INTO _sys_errors VALUES (20000809202401,160,-2,'auth_add_group','','You do not have the permissions to add the group you were attempting to add.  You may wish to contact your departmental administrator, who should have the access to add the group.');
+INSERT INTO _sys_errors VALUES (20000809202401,159,-2,'','','You do not have the appropriate permissions to add/change the field you were attempting to add/change.  You may wish to contact your departmental administrator who should have access to add/change the field(s) in question.');
+INSERT INTO _sys_errors VALUES (20000809202401,155,-14,'','','Please check the format of the highlighted field.  The data was not entered in the format which our database was expecting.  If you need help with the correct format, please check the help pages.');
+INSERT INTO _sys_errors VALUES (20000809202401,154,-17,'','','There are no IPs available in the subnet you have chosen. Please choose a different subnet.  If you believe you need an IP address in the chosen subnet, please email DataCommunications at dc0m@andrew.cmu.edu');
+INSERT INTO _sys_errors VALUES (20000809202401,151,-28,'','','Check the cable that you have selected. We do not have a record of the cable which you entered.');
+INSERT INTO _sys_errors VALUES (20000809202401,152,-35,'','','Only some subnets are configured to allow a dynamic address.  For now, you must select a different option under the \'Mode\' pull-down menu.');
+INSERT INTO _sys_errors VALUES (20000809202401,147,-12,'','','Be sure you have filled in every text field appropriately.  Click on the Help link if you are still having problems with this web form.');
+INSERT INTO _sys_errors VALUES (20000809202401,148,-12,'','host_name','Your hostname may only contain alpha-numeric characters and dashes.  This field is case insensitive, and must not be blank.');
+INSERT INTO _sys_errors VALUES (20000809202401,146,-1,'','mac_address','Your hardware address contains 12 hexadecimal (the numbers 0 - 9 and letters A - F case-insensitive) characters as well as colons or dashes. The address also usually begins with 00 - specifically if yours begins with 44, it\'s probably incorrect (the PPP adapter).  Refer to the Getting Started documentation if you need help finding your hardware address.');
+INSERT INTO _sys_errors VALUES (20000809202401,145,-1,'','','The characters you typed in were not expected by our system.  If you do not know what characters to type into the field, please click on the HELP link to guide you through what the appropriate text is.');
+INSERT INTO _sys_errors VALUES (20000809202401,144,-23,'','','You cannot carry out the action requested because the entry you are trying to alter contains data that is still in use.  Please contact your departmental administrator if you still have questions.');
+INSERT INTO _sys_errors VALUES (20000809202401,142,-20,'','','The host you requested does not exist in our database.  Please check the spelling.');
+INSERT INTO _sys_errors VALUES (20000809202401,141,-4,'','','The group you requested does not exist.  Please check the spelling or contact your departmental administrator.');
+INSERT INTO _sys_errors VALUES (20000809202401,139,-15,'','','You cannot have a \'.\' (period) as part of your hostname.  Please re-enter a hostname or click on help if you are having problems with your hostname.');
+INSERT INTO _sys_errors VALUES (20000809202401,140,-6,'','','Someone else is already using the highlighted entry.  As appropriate, please double check your entry, change your entry, or you may even need the previous person who has the entry in question to remove their entry (i.e. in the case of a wireless card transfer). <br><b>NOTE:</b>  This error may have been caused by clicking the back or forward buttons on your web browser, which can cause a previous request to get submitted again.');
+INSERT INTO _sys_errors VALUES (20000809202401,137,-10,'','','The data entered is not in an accepted format.  Please check the format and try again.  Refer to the help files online which show you the proper format.');
+INSERT INTO _sys_errors VALUES (20000809202401,138,-9,'','','An error has occurred in the database server upon which this system depends.  This error message has automatically sent an email to the people in charge of the sys.  No further action is necessary by you.');
+INSERT INTO _sys_errors VALUES (20000809202401,135,-22,'','','The hi-lighted field may not be left blank.  Please click on the HELP link to find out what needs to be entered into the field.');
+INSERT INTO _sys_errors VALUES (20000809202401,134,-18,'','','Please choose a different IP address that is allowed on this subnet.  You may also need to go back, and choose a different subnet if you are confident in the IP choice.  You may also contact your departmental administrator if you believe your IP address is in the wrong range.');
+INSERT INTO _sys_errors VALUES (20011109142707,179,-38,'','','You have exceeded your quota for static registrations on this subnet. You can view the <a href=\"netreg.pl?op=subnets_show_policy\">Subnet Policies</a> to view the quota information.');
+INSERT INTO _sys_errors VALUES (20011109142723,180,-39,'','','You have exceeded your quota for dynamic registrations on this subnet. You can view the <a href=\"netreg.pl?op=subnets_show_policy\">Subnet Policies</a> to view the quota information.');
+
+--
+-- Table structure for table '_sys_info'
+--
+
+CREATE TABLE _sys_info (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  sys_key char(16) NOT NULL default '',
+  sys_value char(128) NOT NULL default '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_key (sys_key)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table '_sys_info'
+--
+
+
+INSERT INTO _sys_info VALUES (20011228130844,1,'DB_OFFLINE_NOT','Change key to DB_OFFLINE, and this value to the message to present users, when you want to lock out all but superusers.');
+
+--
+-- Table structure for table '_sys_scheduled'
+--
+
+CREATE TABLE _sys_scheduled (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name varchar(128) NOT NULL default '',
+  previous_run datetime NOT NULL default '0000-00-00 00:00:00',
+  next_run datetime NOT NULL default '0000-00-00 00:00:00',
+  def_interval mediumint(8) unsigned NOT NULL default '0',
+  blocked_until datetime NOT NULL default '0000-00-00 00:00:00',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_name (name)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table '_sys_scheduled'
+--
+
+
+INSERT INTO _sys_scheduled VALUES (20011228115601,1,'Create DNS Zones','2001-12-28 11:56:01','2001-12-28 12:11:01',15,'0000-00-00 00:00:00');
+INSERT INTO _sys_scheduled VALUES (20011228115742,2,'Create DHCP Configuration','2001-12-28 11:57:42','2001-12-28 12:12:42',15,'0000-00-00 00:00:00');
+INSERT INTO _sys_scheduled VALUES (20011228114510,3,'Miscellaneous Reports','2001-12-28 11:45:10','2001-12-28 12:45:10',60,'0000-00-00 00:00:00');
+INSERT INTO _sys_scheduled VALUES (20011228140740,4,'Sweep Outlets','2999-01-01 00:00:00','2999-01-01 00:00:00',60,'0000-00-00 00:00:00');
+INSERT INTO _sys_scheduled VALUES (20011228140740,5,'LDAP User Sync','2999-01-01 00:00:00','2999-01-01 00:00:00',180,'0000-00-00 00:00:00');
+INSERT INTO _sys_scheduled VALUES (20011228140740,6,'AFS Sync','2999-01-01 00:00:00','2999-01-01 00:00:00',360,'0000-00-00 00:00:00');
+INSERT INTO _sys_scheduled VALUES (20011228140740,7,'PTS Loader','2999-01-01 00:00:00','2999-01-01 00:00:00',1440,'0000-00-00 00:00:00');
+INSERT INTO _sys_scheduled VALUES (20011228140740,8,'CS Hosts Dump','2999-01-01 00:00:00','2999-01-01 00:00:00',360,'0000-00-00 00:00:00');
+INSERT INTO _sys_scheduled VALUES (20011227210637,9,'Consistency Checker','2001-12-27 21:06:37','2001-12-28 21:06:37',1440,'0000-00-00 00:00:00');
+INSERT INTO _sys_scheduled VALUES (20011228140740,10,'Remedy Reports','2999-01-01 00:00:00','2999-01-01 00:00:00',60,'0000-00-00 00:00:00');
+INSERT INTO _sys_scheduled VALUES (20011228115743,11,'Create DNS Configurations','2001-10-22 22:06:43','2001-12-28 12:12:43',15,'0000-00-00 00:00:00');
+INSERT INTO _sys_scheduled VALUES (20011228115901,12,'Dump Service Info','2001-12-28 11:59:01','2001-12-28 12:04:01',5,'0000-00-00 00:00:00');
+INSERT INTO _sys_scheduled VALUES (20011210182057,13,'Delete Expired Machines','2001-12-10 18:18:03','2002-02-08 18:18:03',1440,'0000-00-00 00:00:00');
+
+--
+-- Table structure for table 'activation_queue'
+--
+
+CREATE TABLE activation_queue (
+  version timestamp(14) NOT NULL,
+  id smallint(5) unsigned NOT NULL auto_increment,
+  name char(64) NOT NULL default '',
+  PRIMARY KEY  (id),
+  KEY index_nodup (name)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'activation_queue'
+--
+
+
+INSERT INTO activation_queue VALUES (20011228133909,14,'MainCampus');
+INSERT INTO activation_queue VALUES (20011228130938,12,'WestCampus');
+
+--
+-- Table structure for table 'attribute'
+--
+
+CREATE TABLE attribute (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  spec int(10) unsigned NOT NULL default '0',
+  owner_table enum('service_membership','service','users','groups','outlet','vlan','subnet','machine') NOT NULL default 'service_membership',
+  owner_tid int(10) unsigned NOT NULL default '0',
+  data text,
+  PRIMARY KEY  (id),
+  KEY index_owner (owner_tid),
+  KEY index_spec (spec)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'attribute'
+--
+
+
+INSERT INTO attribute VALUES (20020102230335,1,11,'service',4,'519');
+INSERT INTO attribute VALUES (20020102230343,2,12,'service',4,'520');
+INSERT INTO attribute VALUES (20020102230356,3,9,'service_membership',1,'dynamic');
+INSERT INTO attribute VALUES (20020102230405,4,10,'service_membership',1,'master');
+INSERT INTO attribute VALUES (20020102230412,5,9,'service_membership',2,'dynamic ');
+INSERT INTO attribute VALUES (20020102230420,6,10,'service_membership',2,'secondary');
+INSERT INTO attribute VALUES (20020307000553,7,20,'service_membership',3,'bind8');
+INSERT INTO attribute VALUES (20020307000553,8,24,'service_membership',3,'master');
+INSERT INTO attribute VALUES (20020307000553,9,20,'service_membership',4,'bind8');
+INSERT INTO attribute VALUES (20020307000553,10,24,'service_membership',4,'slave');
+INSERT INTO attribute VALUES (20020307000553,11,20,'service_membership',5,'bind4');
+INSERT INTO attribute VALUES (20020307000553,12,24,'service_membership',5,'master');
+INSERT INTO attribute VALUES (20020307000553,13,20,'service_membership',6,'bind4');
+INSERT INTO attribute VALUES (20020307000553,14,24,'service_membership',6,'slave');
+
+--
+-- Table structure for table 'attribute_spec'
+--
+
+CREATE TABLE attribute_spec (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name varchar(255) NOT NULL default '',
+  format text NOT NULL,
+  scope enum('service_membership','service','users','groups','outlet','vlan','subnet','machine') NOT NULL default 'service_membership',
+  type int(10) unsigned NOT NULL default '0',
+  ntimes smallint(5) unsigned NOT NULL default '0',
+  description varchar(255) NOT NULL default '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_name (name,type,scope),
+  KEY index_type (type)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'attribute_spec'
+--
+
+
+INSERT INTO attribute_spec VALUES (20011107021658,1,'Weighting','uint','service_membership',1,1,'The weighting of an individual machine.');
+INSERT INTO attribute_spec VALUES (20011107023001,2,'NumUsers_Weight','uint','service',1,1,'The number of users will be multiplied by this value and added to the overall Usability Index.');
+INSERT INTO attribute_spec VALUES (20011107023034,3,'5SecLoad_Weight','uint','service',1,1,'The 5 second load average will be multiplied by this value and added to the overall Usability Index.');
+INSERT INTO attribute_spec VALUES (20011107023055,4,'1MinLoad_Weight','uint','service',1,1,'The 1 minute load average will be multiplied by this value and added to the overall Usability Index.');
+INSERT INTO attribute_spec VALUES (20011107023101,5,'5MinLoad_Weight','uint','service',1,1,'The 5 minute load average will be multiplied by this value and added to the overall Usability Index.');
+INSERT INTO attribute_spec VALUES (20011107023154,6,'NumProcs_Weight','uint','service',1,1,'The number of processes will be multiplied by this value and added to the overall Usability Index.');
+INSERT INTO attribute_spec VALUES (20011108221818,7,'RR_Type','enum(CNAME,A)','service',1,1,'The type of record generated - CNAME or A record.');
+INSERT INTO attribute_spec VALUES (20011109115602,8,'Collection_Type','enum(kmemsrv)','service',1,1,'The method for collecting the LB information from the machines.');
+INSERT INTO attribute_spec VALUES (20011129153138,9,'File Type','enum(dynamic,static)','service_membership',5,1,'The type of file that should be written.');
+INSERT INTO attribute_spec VALUES (20011129153909,10,'Dynamic Failover','enum(master,secondary,neither)','service_membership',5,1,'Only one server may be a master, and one a secondary, and this is setup here.');
+INSERT INTO attribute_spec VALUES (20011129153939,11,'Dynamic Master Port','uint','service',5,1,'The port used by the master for failover communications');
+INSERT INTO attribute_spec VALUES (20011129153949,12,'Dynamic Secondary Port','uint','service',5,1,'The port used by the secondary for failover communications');
+INSERT INTO attribute_spec VALUES (20011204202434,13,'LB_Server','string255','service',1,3,'The server that actually runs this LB pool.');
+INSERT INTO attribute_spec VALUES (20011205155056,14,'DNS_Update_Interval','uint','service',1,1,'The interval between successive NSUpdates (sec).');
+INSERT INTO attribute_spec VALUES (20011205160126,15,'DDNS_Key','ustring','service',1,1,'The keys needed to update the records for this LB Pool (name:value)');
+INSERT INTO attribute_spec VALUES (20020307000552,16,'Server Version','enum(bind4,bind8,bind9)','service',6,1,'The version of the server software that this view applies to.');
+INSERT INTO attribute_spec VALUES (20020307000552,17,'DNS Parameter','ustring','service',6,0,'general format for defining a parameter (free form text)');
+INSERT INTO attribute_spec VALUES (20020307000552,18,'Match Statement','ustring','service',7,1,'A statement to match clients to this class.');
+INSERT INTO attribute_spec VALUES (20020307000552,19,'Service View Name','string64','service_membership',8,1,'The name of a view specification in this server group. _default_ is the global space.');
+INSERT INTO attribute_spec VALUES (20020307000552,20,'Server Version','enum(bind4,bind8,bind9)','service_membership',8,1,'The version of the server software that this view applies to.');
+INSERT INTO attribute_spec VALUES (20020307000552,21,'Service View Order','int','service_membership',8,1,'A cardinal ordering of this view in the configuration. Numerical order is assumed, 1 at top. If more than one have the same value, the ordering is of those is not guaranteed.');
+INSERT INTO attribute_spec VALUES (20020307000552,22,'Zone In View','string64','service_membership',8,0,'Specify the view that this zone should be in. No specified views will cause it to be put in the default view.');
+INSERT INTO attribute_spec VALUES (20020307000552,23,'Zone Parameter','ustring','service_membership',8,0,'A general zone option or other parameter. Semicolon will be appended.');
+INSERT INTO attribute_spec VALUES (20020307000552,24,'Server Type','enum(master,slave,forward,none)','service_membership',8,1,'Should zones be setup as master or secondary for this machine.');
+INSERT INTO attribute_spec VALUES (20011129153939,25,'OMAPI Port','uint','service',5,1,'The port for OMAPI communications.');
+INSERT INTO attribute_spec VALUES (20011129153939,26,'OMAPI Key','string64','service',5,1,'The key used for OMAPI communications.');
+INSERT INTO attribute_spec VALUES (20011129153939,27,'Default DHCP Service Pool','enum(Yes)','service',5,1,'Is this the default service pool.  If yes, receives all un-allocated subnets.');
+INSERT INTO attribute_spec VALUES (20020807000552,41,'Import Unspecified Zones','enum(yes,no)','service',6,0,'Control import of zones from global view into subviews');
+INSERT INTO attribute_spec VALUES (20040804070518,61,'background-color','ustring','users',0,1,'Color to use for web page backgrounds');
+INSERT INTO attribute_spec VALUES (20050104070125,62,'port-speed','enum(auto,forced-10,forced-100)','outlet',0,1,'Set the speed of a switch port');
+INSERT INTO attribute_spec VALUES (20050104070145,63,'port-duplex','enum(auto,forced-half,forced-full)','outlet',0,1,'Set the duplex of a switch port');
+INSERT INTO attribute_spec VALUES (20050104070404,64,'Port Security Mode','enum(enabled,disabled)','vlan',0,1,'Enable/Disable port security mode on outlets in this vlan, by default.');
+INSERT INTO attribute_spec VALUES (20050104070423,65,'Port Security Mode','enum(enabled,disabled)','outlet',0,1,'Enable/Disable port security mode on the outlet');
+INSERT INTO attribute_spec VALUES (20050104070447,66,'Port-Fast Mode','enum(enabled,disabled)','outlet',0,1,'Enable/Disable spanning tree port-fast mode on the outlet');
+INSERT INTO attribute_spec VALUES (20050104070517,67,'Extra Menu Item','ustring','subnet',0,0,'Extra HTML to output in the machine information page, in the machine operations menu.');
+INSERT INTO attribute_spec VALUES (20020307000552,60,'Forward To','enum(master,slave,both)','service',8,1,'Designate forwarding to master or slave.');
+
+
+--
+-- Table structure for table 'building'
+--
+
+CREATE TABLE building (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name char(64) NOT NULL default '',
+  abbreviation char(16) NOT NULL default '',
+  building char(8) NOT NULL default '',
+  activation_queue smallint(5) unsigned NOT NULL default '0',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_name (name),
+  UNIQUE KEY index_abbreviation (abbreviation),
+  UNIQUE KEY index_number (building)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'building'
+--
+
+
+INSERT INTO building VALUES (20011228133918,1,'Satellite Building','sat','05',12);
+INSERT INTO building VALUES (20011228133912,2,'Main Building','main','01',14);
+
+--
+-- Table structure for table 'cable'
+--
+
+CREATE TABLE cable (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  label_from char(24) NOT NULL default '',
+  label_to char(24) NOT NULL default '',
+  type enum('TYPE1','TYPE2','CAT5','CAT6','CATV','SMF0080','MMF0500','MMF0625','MMF1000','CAT5-TELCO') default NULL,
+  destination enum('OUTLET','CLOSET') default NULL,
+  rack enum('IBM','CAT5/6','CATV','FIBER','TELCO') NOT NULL default 'IBM',
+  prefix char(1) NOT NULL default '',
+  from_building char(8) NOT NULL default '',
+  from_wing char(1) NOT NULL default '',
+  from_floor char(2) NOT NULL default '',
+  from_closet char(1) NOT NULL default '',
+  from_rack char(1) NOT NULL default '',
+  from_panel char(1) NOT NULL default '',
+  from_x char(1) NOT NULL default '',
+  from_y char(1) NOT NULL default '',
+  to_building char(8) default NULL,
+  to_wing char(1) default NULL,
+  to_floor char(2) default NULL,
+  to_closet char(1) default NULL,
+  to_rack char(1) default NULL,
+  to_panel char(1) default NULL,
+  to_x char(1) default NULL,
+  to_y char(1) default NULL,
+  to_floor_plan_x char(2) default NULL,
+  to_floor_plan_y char(2) default NULL,
+  to_outlet_number char(1) default NULL,
+  to_room_number char(32) default NULL,
+  PRIMARY KEY  (id),
+  UNIQUE KEY label_from_2 (label_from),
+  KEY index_lfrom (label_from),
+  KEY index_lto (label_to),
+  KEY label_from (label_from,label_to,id),
+  KEY label_to (label_to,label_from),
+  KEY label_to_2 (label_to,label_from,id,version)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'cable'
+--
+
+--
+-- Table structure for table 'credentials'
+--
+
+CREATE TABLE credentials (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  authid varchar(255) NOT NULL default '',
+  user int(10) unsigned NOT NULL default '0',
+  description varchar(255) NOT NULL default '',
+  type tinyint(4) NOT NULL default '1',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_authid (authid),
+  KEY index_user (user)
+) TYPE=MyISAM;
+
+
+INSERT INTO credentials VALUES (20011228123718,1,'netreg',1,'Network Registration System', 2);
+
+--
+-- Table structure for table 'dhcp_option'
+--
+
+CREATE TABLE dhcp_option (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  value char(255) NOT NULL default '',
+  type enum('global','share','subnet','machine','service') NOT NULL default 'global',
+  tid int(10) unsigned NOT NULL default '0',
+  type_id int(10) unsigned NOT NULL default '0',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_nodup (type_id,type,tid,value),
+  KEY index_record (type,tid)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'dhcp_option'
+--
+
+
+INSERT INTO dhcp_option VALUES (20020307000555,4850,'10.128.0.127','subnet',234,29);
+INSERT INTO dhcp_option VALUES (20020307000555,4,'2','global',0,47);
+INSERT INTO dhcp_option VALUES (20020307000555,4847,'\"example.org\"','global',0,16);
+INSERT INTO dhcp_option VALUES (20020307000555,4845,'10.128.0.187','global',0,257);
+INSERT INTO dhcp_option VALUES (20020307000555,4848,'10.128.0.198','global',0,45);
+INSERT INTO dhcp_option VALUES (20020307000555,4826,'interim','global',0,259);
+INSERT INTO dhcp_option VALUES (20020307000555,4813,'code 144 = text','global',0,145);
+INSERT INTO dhcp_option VALUES (20020307000555,4846,'10.128.0.190, 10.128.0.191','global',0,43);
+INSERT INTO dhcp_option VALUES (20020307000555,4860,'255.255.254.0','subnet',236,2);
+INSERT INTO dhcp_option VALUES (20020307000555,4859,'10.128.8.1','subnet',236,4);
+INSERT INTO dhcp_option VALUES (20020307000555,4858,'10.128.9.255','subnet',236,29);
+INSERT INTO dhcp_option VALUES (20020307000555,4857,'255.255.248.0','subnet',233,2);
+INSERT INTO dhcp_option VALUES (20020307000555,4856,'255.255.255.128','subnet',235,2);
+INSERT INTO dhcp_option VALUES (20020307000555,4855,'10.128.7.255','subnet',233,29);
+INSERT INTO dhcp_option VALUES (20020307000555,4854,'10.128.2.1','subnet',233,4);
+INSERT INTO dhcp_option VALUES (20020307000555,4853,'10.128.0.255','subnet',235,29);
+INSERT INTO dhcp_option VALUES (20020307000555,4852,'10.128.0.129','subnet',235,4);
+INSERT INTO dhcp_option VALUES (20020307000555,4851,'255.255.255.128','subnet',234,2);
+INSERT INTO dhcp_option VALUES (20020307000555,4849,'10.128.0.1','subnet',234,4);
+INSERT INTO dhcp_option VALUES (20020916001829,4861,'','global',0,260);
+INSERT INTO dhcp_option VALUES (20020916001829,4862,'on','global',0,261);
+INSERT INTO dhcp_option VALUES (20020916001829,4863,'client-updates','global',0,262);
+INSERT INTO dhcp_option VALUES (20020916002212,4864,'86400','global',0,263);
+INSERT INTO dhcp_option VALUES (20020916002212,4865,'86400','global',0,264);
+
+--
+-- Table structure for table 'dhcp_option_type'
+--
+
+CREATE TABLE dhcp_option_type (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name varchar(64) NOT NULL default '',
+  number int(10) unsigned NOT NULL default '0',
+  format varchar(255) NOT NULL default '',
+  builtin enum('Y','N') NOT NULL default 'N',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_name (name),
+  KEY index_number (number)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'dhcp_option_type'
+--
+
+
+INSERT INTO dhcp_option_type VALUES (20020307000555,1,'option pad',0,'','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,2,'option subnet-mask',1,'IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,3,'option time-offset',2,'INTEGER 32','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,4,'option routers',3,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,5,'option time-servers',4,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,6,'option ien116-name-servers',5,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,7,'option domain-name-servers',6,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,8,'option log-servers',7,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,9,'option cookie-servers',8,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,10,'option lpr-servers',9,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,11,'option impress-servers',10,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,12,'option resource-location-servers',11,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,13,'option host-name',12,'STRING','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,14,'option boot-size',13,'UNSIGNED INTEGER 16','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,15,'option merit-dump',14,'TEXT','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,16,'option domain-name',15,'TEXT','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,17,'option swap-server',16,'IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,18,'option root-path',17,'TEXT','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,19,'option extensions-path',18,'TEXT','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,20,'option ip-forwarding',19,'BOOLEAN','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,21,'option non-local-source-routing',20,'BOOLEAN','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,22,'option policy-filter',21,'ARRAY OF { IP-ADDRESS , IP-ADDRESS }','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,23,'option max-dgram-reassembly',22,'UNSIGNED INTEGER 16','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,24,'option default-ip-ttl',23,'UNSIGNED INTEGER 8','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,25,'option path-mtu-aging-timeout',24,'UNSIGNED INTEGER 32','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,26,'option path-mtu-plateau-table',25,'ARRAY OF UNSIGNED INTEGER 16','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,27,'option interface-mtu',26,'UNSIGNED INTEGER 16','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,28,'option all-subnets-local',27,'BOOLEAN','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,29,'option broadcast-address',28,'IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,30,'option perform-mask-discovery',29,'BOOLEAN','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,31,'option mask-supplier',30,'BOOLEAN','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,32,'option router-discovery',31,'BOOLEAN','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,33,'option router-solicitation-address',32,'IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,34,'option static-routes',33,'ARRAY OF { IP-ADDRESS , IP-ADDRESS }','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,35,'option trailer-encapsulation',34,'BOOLEAN','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,36,'option arp-cache-timeout',35,'UNSIGNED INTEGER 32','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,37,'option ieee802-3-encapsulation',36,'BOOLEAN','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,38,'option default-tcp-ttl',37,'UNSIGNED INTEGER 8','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,39,'option tcp-keepalive-interval',38,'UNSIGNED INTEGER 32','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,40,'option tcp-keepalive-garbage',39,'BOOLEAN','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,41,'option nis-domain',40,'TEXT','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,42,'option nis-servers',41,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,43,'option ntp-servers',42,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,44,'option vendor-encapsulated-options',43,'STRING','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,45,'option netbios-name-servers',44,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,46,'option netbios-dd-server',45,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,47,'option netbios-node-type',46,'UNSIGNED INTEGER 8','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,48,'option netbios-scope',47,'TEXT','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,49,'option font-servers',48,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,50,'option x-display-manager',49,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,51,'option dhcp-requested-address',50,'IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,52,'option dhcp-lease-time',51,'UNSIGNED INTEGER 32','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,53,'option dhcp-option-overload',52,'UNSIGNED INTEGER 8','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,54,'option dhcp-message-type',53,'UNSIGNED INTEGER 8','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,55,'option dhcp-server-identifier',54,'IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,56,'option dhcp-parameter-request-list',55,'ARRAY OF UNSIGNED INTEGER 8','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,57,'option dhcp-message',56,'TEXT','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,58,'option dhcp-max-message-size',57,'UNSIGNED INTEGER 16','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,59,'option dhcp-renewal-time',58,'UNSIGNED INTEGER 32','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,60,'option dhcp-rebinding-time',59,'UNSIGNED INTEGER 32','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,61,'option vendor-class-identifier',60,'STRING','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,62,'option dhcp-client-identifier',61,'STRING','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,65,'option nisplus-domain',64,'TEXT','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,66,'option nisplus-servers',65,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,67,'option tftp-server-name',66,'TEXT','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,68,'option bootfile-name',67,'TEXT','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,69,'option mobile-ip-home-agent',68,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,70,'option smtp-server',69,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,71,'option pop-server',70,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,72,'option nntp-server',71,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,73,'option www-server',72,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,74,'option finger-server',73,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,75,'option irc-server',74,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,76,'option streettalk-server',75,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,77,'option streettalk-directory-assistance-server',76,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,78,'option user-class',77,'TEXT','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,86,'option nds-servers',85,'ARRAY OF IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,87,'option nds-tree-name',86,'STRING','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,88,'option nds-context',87,'STRING','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,145,'option local-printer-cfg',144,'STRING','N');
+INSERT INTO dhcp_option_type VALUES (20020307000555,211,'option authenticate',210,'STRING','N');
+INSERT INTO dhcp_option_type VALUES (20020916001757,260,'authoritative',1,'RAW','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,257,'next-server',1025,'IP-ADDRESS','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,258,'filename',1026,'TEXT','Y');
+INSERT INTO dhcp_option_type VALUES (20020307000555,259,'ddns-update-style',1027,'RAW','Y');
+INSERT INTO dhcp_option_type VALUES (20020916002212,264,'default-lease-time',1,'INTEGER','Y');
+INSERT INTO dhcp_option_type VALUES (20020916002212,263,'max-lease-time',1,'INTEGER','Y');
+INSERT INTO dhcp_option_type VALUES (20020916001757,262,'ignore',1,'RAW','Y');
+INSERT INTO dhcp_option_type VALUES (20020916001757,261,'get-lease-hostnames',1,'BOOLEAN','Y');
+
+--
+-- Table structure for table 'dns_resource'
+--
+
+CREATE TABLE dns_resource (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name varchar(255) NOT NULL default '',
+  ttl int(10) unsigned NOT NULL default '0',
+  type varchar(8) NOT NULL default '',
+  rname varchar(255) default NULL,
+  rmetric0 int(10) unsigned default NULL,
+  rmetric1 int(10) unsigned default NULL,
+  rport int(10) unsigned default NULL,
+  text0 varchar(255) default NULL,
+  text1 varchar(255) default NULL,
+  name_zone int(10) unsigned NOT NULL default '0',
+  owner_type enum('machine','dns_zone','service') NOT NULL default 'machine',
+  owner_tid int(10) unsigned NOT NULL default '0',
+  rname_tid int(10) unsigned default NULL,
+  PRIMARY KEY  (id),
+  KEY index_name (name),
+  KEY index_rname (rname),
+  KEY index_name_zone (name_zone)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'dns_resource'
+--
+
+
+INSERT INTO dns_resource VALUES (20020102223533,1,'NET.EXAMPLE.ORG',0,'NS','DDNS-NS.EXAMPLE.ORG',0,0,0,'','',12,'dns_zone',13,3);
+INSERT INTO dns_resource VALUES (20020102223547,2,'NET.EXAMPLE.ORG',0,'NS','DDNS-NS2.EXAMPLE.ORG',0,0,0,'','',12,'dns_zone',13,4);
+INSERT INTO dns_resource VALUES (20020102223617,3,'EXAMPLE.ORG',0,'NS','NS.EXAMPLE.ORG',0,0,0,'','',1,'dns_zone',12,1);
+INSERT INTO dns_resource VALUES (20020102223631,4,'EXAMPLE.ORG',0,'NS','NS2.EXAMPLE.ORG',0,0,0,'','',1,'dns_zone',12,2);
+INSERT INTO dns_resource VALUES (20020102223733,5,'2.128.10.IN-ADDR.ARPA',0,'NS','NS.EXAMPLE.ORG',0,0,0,'','',20,'dns_zone',23,1);
+INSERT INTO dns_resource VALUES (20020102223747,6,'2.128.10.IN-ADDR.ARPA',0,'NS','NS2.EXAMPLE.ORG',0,0,0,'','',20,'dns_zone',23,2);
+INSERT INTO dns_resource VALUES (20020102223828,7,'0.128.10.IN-ADDR.ARPA',0,'NS','NS.EXAMPLE.ORG',0,0,0,'','',20,'dns_zone',21,1);
+INSERT INTO dns_resource VALUES (20020102223839,8,'0.128.10.IN-ADDR.ARPA',0,'NS','NS2.EXAMPLE.ORG',0,0,0,'','',20,'dns_zone',21,2);
+INSERT INTO dns_resource VALUES (20020102223915,9,'1.128.10.IN-ADDR.ARPA',0,'NS','NS.EXAMPLE.ORG',0,0,0,'','',20,'dns_zone',22,1);
+INSERT INTO dns_resource VALUES (20020102223928,10,'1.128.10.IN-ADDR.ARPA',0,'NS','NS2.EXAMPLE.ORG',0,0,0,'','',20,'dns_zone',22,2);
+INSERT INTO dns_resource VALUES (20020102224049,11,'8.128.10.IN-ADDR.ARPA',0,'NS','NS.EXAMPLE.ORG',0,0,0,'','',20,'dns_zone',24,1);
+INSERT INTO dns_resource VALUES (20020102224102,12,'8.128.10.IN-ADDR.ARPA',0,'NS','NS2.EXAMPLE.ORG',0,0,0,'','',20,'dns_zone',24,2);
+INSERT INTO dns_resource VALUES (20020102224649,14,'REMOTE.EXAMPLE.ORG',0,'NS','NS.REMOTE.EXAMPLE.ORG',0,0,0,'','',12,'dns_zone',15,7);
+INSERT INTO dns_resource VALUES (20020102224706,15,'REMOTE.EXAMPLE.ORG',0,'NS','NS2.REMOTE.EXAMPLE.ORG',0,0,0,'','',12,'dns_zone',15,8);
+INSERT INTO dns_resource VALUES (20020102225626,16,'WWW.EXAMPLE.ORG',0,'CNAME','NS2.EXAMPLE.ORG',0,0,0,'','',12,'machine',2,2);
+
+--
+-- Table structure for table 'dns_resource_type'
+--
+
+CREATE TABLE dns_resource_type (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name char(8) NOT NULL default '',
+  format char(8) NOT NULL default '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_name (name)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'dns_resource_type'
+--
+
+
+INSERT INTO dns_resource_type VALUES (00000000000000,1,'NS','N');
+INSERT INTO dns_resource_type VALUES (00000000000000,2,'MX','NM0');
+INSERT INTO dns_resource_type VALUES (00000000000000,3,'TXT','T0');
+INSERT INTO dns_resource_type VALUES (20000627140354,4,'CNAME','N');
+INSERT INTO dns_resource_type VALUES (00000000000000,5,'SRV','NM0M1P');
+INSERT INTO dns_resource_type VALUES (00000000000000,6,'HINFO','T0T1');
+INSERT INTO dns_resource_type VALUES (20010913141842,7,'ANAME','N');
+INSERT INTO dns_resource_type VALUES (20020612223411,8,'AFSDB','NM0');
+
+--
+-- Table structure for table 'dns_zone'
+--
+
+CREATE TABLE dns_zone (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name varchar(255) NOT NULL default '',
+  soa_host varchar(255) NOT NULL default '',
+  soa_email varchar(255) NOT NULL default '',
+  soa_serial int(10) unsigned NOT NULL default '0',
+  soa_refresh int(10) unsigned NOT NULL default '3600',
+  soa_retry int(10) unsigned NOT NULL default '900',
+  soa_expire int(10) unsigned NOT NULL default '2419200',
+  soa_minimum int(10) unsigned NOT NULL default '3600',
+  type enum('fw-toplevel','rv-toplevel','fw-permissible','rv-permissible','fw-delegated','rv-delegated') default NULL,
+  last_update datetime NOT NULL default '0000-00-00 00:00:00',
+  soa_default int(10) unsigned NOT NULL default '86400',
+  parent int(10) unsigned NOT NULL default '0',
+  ddns_auth text,
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_name (name),
+  KEY id (id,name),
+  KEY name (name,id)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'dns_zone'
+--
+
+
+INSERT INTO dns_zone VALUES (20011228143210,1,'ORG','','',0,3600,900,2419200,3600,'fw-permissible','0000-00-00 00:00:00',86400,0,'');
+INSERT INTO dns_zone VALUES (20011228143214,2,'NET','','',0,3600,900,2419200,3600,'fw-permissible','0000-00-00 00:00:00',86400,0,'');
+INSERT INTO dns_zone VALUES (20011228143221,3,'COM','','',0,3600,900,2419200,3600,'fw-permissible','0000-00-00 00:00:00',86400,0,'');
+INSERT INTO dns_zone VALUES (20011228143224,4,'EDU','','',0,3600,900,2419200,3600,'fw-permissible','0000-00-00 00:00:00',86400,0,'');
+INSERT INTO dns_zone VALUES (20011228143750,5,'ARPA','','',0,3600,900,2419200,3600,'rv-permissible','0000-00-00 00:00:00',86400,0,'');
+INSERT INTO dns_zone VALUES (20011228143750,6,'IN-ADDR.ARPA','','',0,3600,900,2419200,3600,'rv-permissible','0000-00-00 00:00:00',86400,5,'');
+INSERT INTO dns_zone VALUES (20020102151647,15,'REMOTE.EXAMPLE.ORG','','',0,3600,900,2419200,3600,'fw-delegated','0000-00-00 00:00:00',86400,12,'');
+INSERT INTO dns_zone VALUES (20020102151553,14,'SRV.EXAMPLE.ORG','','',0,3600,900,2419200,3600,'fw-permissible','0000-00-00 00:00:00',86400,12,'');
+INSERT INTO dns_zone VALUES (20020102151506,13,'NET.EXAMPLE.ORG','ns.net.example.org','root.net.example.org',0,900,450,3600000,86400,'fw-toplevel','0000-00-00 00:00:00',86400,13,'');
+INSERT INTO dns_zone VALUES (20020102151353,12,'EXAMPLE.ORG','ns.example.org','root.example.org',0,900,450,3600000,86400,'fw-toplevel','0000-00-00 00:00:00',86400,12,'');
+INSERT INTO dns_zone VALUES (20020102152805,16,'127.IN-ADDR.ARPA','ns.example.org','root.example.org',0,900,450,3600000,86400,'rv-toplevel','0000-00-00 00:00:00',86400,16,'');
+INSERT INTO dns_zone VALUES (20020102152859,17,'0.127.IN-ADDR.ARPA','','',0,3600,900,2419200,3600,'rv-permissible','0000-00-00 00:00:00',86400,16,'');
+INSERT INTO dns_zone VALUES (20020102152909,18,'0.0.127.IN-ADDR.ARPA','','',0,3600,900,2419200,3600,'rv-permissible','0000-00-00 00:00:00',86400,16,'');
+INSERT INTO dns_zone VALUES (20020102161209,19,'10.IN-ADDR.ARPA','','',0,3600,900,2419200,3600,'rv-permissible','0000-00-00 00:00:00',86400,0,'');
+INSERT INTO dns_zone VALUES (20020102161300,20,'128.10.IN-ADDR.ARPA','ns.example.org','root.example.org',0,900,450,3600000,86400,'rv-toplevel','0000-00-00 00:00:00',86400,20,'');
+INSERT INTO dns_zone VALUES (20020102161402,21,'0.128.10.IN-ADDR.ARPA','ns.example.org','root.example.org',0,900,450,3600000,86400,'rv-toplevel','0000-00-00 00:00:00',86400,21,'');
+INSERT INTO dns_zone VALUES (20020102161424,22,'1.128.10.IN-ADDR.ARPA','ns.example.org','root.example.org',0,900,450,3600000,86400,'rv-toplevel','0000-00-00 00:00:00',86400,22,'');
+INSERT INTO dns_zone VALUES (20020102161441,23,'2.128.10.IN-ADDR.ARPA','ns.example.org','root.example.org',0,900,450,3600000,86400,'rv-toplevel','0000-00-00 00:00:00',86400,23,'');
+INSERT INTO dns_zone VALUES (20020102163330,24,'8.128.10.IN-ADDR.ARPA','ns.example.org','root.example.org',0,900,450,3600000,86400,'rv-toplevel','0000-00-00 00:00:00',86400,24,'');
+
+--
+-- Table structure for table 'groups'
+--
+
+CREATE TABLE groups (
+  version timestamp(14) NOT NULL,
+  id int(10) NOT NULL auto_increment,
+  name char(32) NOT NULL default '',
+  flags set('abuse','suspend','purge_mailusers') NOT NULL default '',
+  description char(64) NOT NULL default '',
+  comment_lvl9 char(64) NOT NULL default '',
+  comment_lvl5 char(64) NOT NULL default '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_name (name)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'groups'
+--
+
+
+INSERT INTO groups VALUES (20011115112334,1,'netreg:admins','purge_mailusers','Network Administrators','','');
+INSERT INTO groups VALUES (20011228140926,150,'dept:president','','Presidents Office','','');
+INSERT INTO groups VALUES (20011228140917,149,'dept:compserv','','Computing Services','','');
+INSERT INTO groups VALUES (20011228123629,148,'netreg:fullread','','NetReg Readers','','');
+
+--
+-- Table structure for table 'machine'
+--
+
+CREATE TABLE machine (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  mac_address char(12) NOT NULL default '',
+  host_name char(255) NOT NULL default '',
+  ip_address int(10) unsigned NOT NULL default '0',
+  mode enum('static','dynamic','reserved','broadcast','pool','base','secondary') NOT NULL default 'static',
+  flags set('abuse','suspend','stolen','no_dnsfwd','no_dnsrev') NOT NULL default '',
+  comment_lvl9 char(255) NOT NULL default '',
+  account char(32) NOT NULL default '',
+  host_name_ttl int(10) unsigned NOT NULL default '0',
+  ip_address_ttl int(10) unsigned NOT NULL default '0',
+  host_name_zone int(10) unsigned NOT NULL default '0',
+  ip_address_zone int(10) unsigned default '0',
+  ip_address_subnet int(10) unsigned NOT NULL default '0',
+  created datetime NOT NULL default '0000-00-00 00:00:00',
+  expires date NOT NULL default '0000-00-00',
+  comment_lvl1 char(255) NOT NULL default '',
+  comment_lvl5 char(255) NOT NULL default '',
+  PRIMARY KEY  (id),
+  KEY index_host_name (host_name),
+  KEY index_host_name_zone (host_name_zone),
+  KEY index_ip_address_zone (ip_address_zone),
+  KEY index_ip_address_subnet (ip_address_subnet),
+  KEY index_ip_address (ip_address),
+  KEY index_mac_address (mac_address),
+  KEY index_subnet_mac (ip_address_subnet,mac_address)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'machine'
+--
+
+
+INSERT INTO machine VALUES (20020102161951,1,'0A0B0C0D0E0F','NS.EXAMPLE.ORG',176160899,'static','','','',0,0,12,21,235,'2002-01-02 16:19:51','0000-00-00','','');
+INSERT INTO machine VALUES (20020102162231,2,'0000AAAABBBB','NS2.EXAMPLE.ORG',176160900,'static','','','',0,0,12,21,235,'2002-01-02 16:22:31','0000-00-00','','');
+INSERT INTO machine VALUES (20020102162327,3,'00AABBCCDDEE','DDNS-NS.EXAMPLE.ORG',176160901,'static','','','',0,0,12,21,235,'2002-01-02 16:23:27','0000-00-00','','');
+INSERT INTO machine VALUES (20020102162354,4,'0000DDDDEEEE','DDNS-NS2.EXAMPLE.ORG',176160902,'static','','','',0,0,12,21,235,'2002-01-02 16:23:54','0000-00-00','','');
+INSERT INTO machine VALUES (20020102163146,5,'0A93F9D3E40B','BOB.EXAMPLE.ORG',176161283,'static','','','',0,0,12,23,233,'2002-01-02 16:31:46','0000-00-00','','');
+INSERT INTO machine VALUES (20020102163351,6,'0800203E4F5E','OFC-3-WAVEPOINT.NET.EXAMPLE.ORG',176162819,'static','','','',0,0,13,24,236,'2002-01-02 16:33:51','0000-00-00','','');
+INSERT INTO machine VALUES (20020102224519,7,'000100020003','NS.REMOTE.EXAMPLE.ORG',176161284,'static','','','',0,0,15,23,233,'2002-01-02 22:45:19','0000-00-00','','');
+INSERT INTO machine VALUES (20020102224546,8,'001100220033','NS2.REMOTE.EXAMPLE.ORG',176161285,'static','','','',0,0,15,23,233,'2002-01-02 22:45:46','0000-00-00','','');
+
+--
+-- Table structure for table 'memberships'
+--
+
+CREATE TABLE memberships (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  uid int(10) unsigned NOT NULL default '0',
+  gid int(10) NOT NULL default '0',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_membership (uid,gid),
+  KEY index_gid (gid)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'memberships'
+--
+
+
+INSERT INTO memberships VALUES (20011228124041,1,1,1);
+
+--
+-- Table structure for table 'network'
+--
+
+CREATE TABLE network (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name char(64) NOT NULL default '',
+  subnet int(10) unsigned NOT NULL default '0',
+  PRIMARY KEY  (id),
+  KEY index_subnet (subnet)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'network'
+--
+
+
+
+--
+-- Table structure for table 'outlet'
+--
+
+CREATE TABLE outlet (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  type int(10) unsigned NOT NULL default '0',
+  cable int(10) unsigned NOT NULL default '0',
+  device int(10) unsigned default NULL,
+  port int(11) NOT NULL default '0',
+  attributes set('activate','deactivate','change') default NULL,
+  flags set('abuse','suspend','permanent','activated') NOT NULL default '',
+  status enum('enabled','partitioned') NOT NULL default 'enabled',
+  account char(32) NOT NULL default '',
+  comment_lvl9 char(255) NOT NULL default '',
+  comment_lvl1 char(255) NOT NULL default '',
+  comment_lvl5 char(255) NOT NULL default '',
+  expires date not null default '0000-00-00',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_cable (cable),
+  KEY index_connect (device,port)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'outlet'
+--
+
+--
+-- Table structure for table 'outlet_vlan_membership'
+--
+
+CREATE TABLE outlet_vlan_membership (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  outlet int(10) unsigned NOT NULL default '0',
+  vlan int(10) unsigned NOT NULL default '0',
+  type enum('primary','voice','other') NOT NULL default 'primary',
+  trunk_type enum('802.1Q','ISL','none') NOT NULL default '802.1Q',
+  status enum('request','active','delete','error','errordelete','novlan') NOT NULL default 'request',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_membership (outlet,vlan),
+  KEY index_type (outlet,vlan,type,trunk_type)
+) TYPE=MyISAM;
+
+
+
+--
+-- Table structure for table 'outlet_type'
+--
+
+CREATE TABLE outlet_type (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name char(64) NOT NULL default '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_name (name)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'outlet_type'
+--
+
+
+INSERT INTO outlet_type VALUES (00000000000000,1,'Shared-10');
+INSERT INTO outlet_type VALUES (00000000000000,2,'Switched-10');
+INSERT INTO outlet_type VALUES (00000000000000,3,'Shared-100');
+INSERT INTO outlet_type VALUES (00000000000000,4,'Switched-100');
+INSERT INTO outlet_type VALUES (00000000000000,5,'Switched-1000');
+INSERT INTO outlet_type VALUES (00000000000000,6,'Netbar');
+
+--
+-- Table structure for table 'protections'
+--
+
+CREATE TABLE protections (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  identity int(11) NOT NULL default '0',
+  tname enum('users','groups','building','cable','outlet','outlet_type','machine','network','subnet','subnet_share','subnet_presence','subnet_domain','dhcp_option_type','dhcp_option','dns_resource_type','dns_resource','dns_zone','_sys_scheduled','activation_queue','service','service_membership','service_type','attribute','attribute_spec','outlet_vlan_membership','vlan','vlan_presence','vlan_subnet_presence','trunk_set','trunkset_building_presence','trunkset_machine_presence','trunkset_vlan_presence','credentials','subnet_registration_modes', 'user_type') NOT NULL default 'users',
+  tid int(11) NOT NULL default '0',
+  rights set('READ','WRITE','ADD') NOT NULL default '',
+  rlevel smallint(5) unsigned NOT NULL default '0',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_nodup (identity,tname,tid,rlevel),
+  KEY index_protection1 (identity,tname,tid),
+  KEY index_prot6 (tname,rights,identity,tid),
+  KEY tid (tid),
+  KEY tname (tname,tid),
+  KEY tname_2 (tname,tid,identity),
+  KEY index_all (tname,tid,identity,rlevel,rights),
+  KEY index_all_2 (tid,tname,identity,rlevel,rights)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'protections'
+--
+
+
+INSERT INTO protections (identity, tname, tid, rights, rlevel) VALUES 
+(0,'dhcp_option',0,'READ',1),
+(-1,'users',0,'READ,WRITE,ADD',9),
+(-1,'credentials',0,'READ,WRITE,ADD',9),
+(-1,'building',0,'READ,WRITE,ADD',9),
+(-1,'subnet_presence',0,'READ,WRITE,ADD',9),
+(-1,'subnet_domain',0,'READ,WRITE,ADD',9),
+(-1,'subnet_registration_modes',0,'READ,WRITE,ADD',9),
+(-1,'dhcp_option_type',0,'READ,WRITE,ADD',9),
+(-1,'dhcp_option',0,'READ,WRITE,ADD',9),
+(-1,'dns_resource_type',0,'READ,WRITE,ADD',9),
+(-1,'dns_resource',0,'READ,WRITE,ADD',9),
+(0,'dns_resource_type',0,'READ',1),
+(0,'building',0,'READ',1),
+(0,'dhcp_option_type',0,'READ',1),
+(-1,'subnet_share',0,'READ,WRITE,ADD',9),
+(0,'subnet_share',0,'READ',1),
+(0,'outlet_type',0,'READ',1),
+(0,'subnet_domain',0,'READ',1),
+(0,'subnet_presence',0,'READ',1),
+(0,'subnet_registration_modes',0,'READ',1),
+(0,'users',0,'READ',1),
+(0,'dns_resource_type',4,'ADD',1),
+(0,'dns_resource',0,'ADD',1),
+(-1,'dhcp_option_type',2,'ADD',9),
+(-1,'dhcp_option_type',1,'ADD',9),
+(-1,'dhcp_option_type',3,'ADD',9),
+(-1,'dhcp_option_type',4,'ADD',9),
+(-1,'dhcp_option_type',5,'ADD',9),
+(-1,'dhcp_option_type',6,'ADD',9),
+(-1,'dhcp_option_type',7,'ADD',9),
+(-1,'dhcp_option_type',8,'ADD',9),
+(-1,'dhcp_option_type',9,'ADD',9),
+(-1,'dhcp_option_type',10,'ADD',9),
+(-1,'dhcp_option_type',11,'ADD',9),
+(-1,'dhcp_option_type',12,'ADD',9),
+(-1,'dhcp_option_type',13,'ADD',9),
+(-1,'dhcp_option_type',14,'ADD',9),
+(-1,'dhcp_option_type',15,'ADD',9),
+(-1,'dhcp_option_type',16,'ADD',9),
+(-1,'dhcp_option_type',17,'ADD',9),
+(-1,'dhcp_option_type',18,'ADD',9),
+(-1,'dhcp_option_type',19,'ADD',9),
+(-1,'dhcp_option_type',20,'ADD',9),
+(-1,'dhcp_option_type',21,'ADD',9),
+(-1,'dhcp_option_type',22,'ADD',9),
+(-1,'dhcp_option_type',23,'ADD',9),
+(-1,'dhcp_option_type',24,'ADD',9),
+(-1,'dhcp_option_type',25,'ADD',9),
+(-1,'dhcp_option_type',26,'ADD',9),
+(-1,'dhcp_option_type',27,'ADD',9),
+(-1,'dhcp_option_type',28,'ADD',9),
+(-1,'dhcp_option_type',29,'ADD',9),
+(-1,'dhcp_option_type',30,'ADD',9),
+(-1,'dhcp_option_type',31,'ADD',9),
+(-1,'dhcp_option_type',32,'ADD',9),
+(-1,'dhcp_option_type',33,'ADD',9),
+(-1,'dhcp_option_type',34,'ADD',9),
+(-1,'dhcp_option_type',35,'ADD',9),
+(-1,'dhcp_option_type',36,'ADD',9),
+(-1,'dhcp_option_type',37,'ADD',9),
+(-1,'dhcp_option_type',38,'ADD',9),
+(-1,'dhcp_option_type',39,'ADD',9),
+(-1,'dhcp_option_type',40,'ADD',9),
+(-1,'dhcp_option_type',41,'ADD',9),
+(-1,'dhcp_option_type',42,'ADD',9),
+(-1,'dhcp_option_type',43,'ADD',9),
+(-1,'dhcp_option_type',44,'ADD',9),
+(-1,'dhcp_option_type',45,'ADD',9),
+(-1,'dhcp_option_type',46,'ADD',9),
+(-1,'dhcp_option_type',47,'ADD',9),
+(-1,'dhcp_option_type',48,'ADD',9),
+(-1,'dhcp_option_type',49,'ADD',9),
+(-1,'dhcp_option_type',50,'ADD',9),
+(-1,'dhcp_option_type',51,'ADD',9),
+(-1,'dhcp_option_type',52,'ADD',9),
+(-1,'dhcp_option_type',53,'ADD',9),
+(-1,'dhcp_option_type',54,'ADD',9),
+(-1,'dhcp_option_type',55,'ADD',9),
+(-1,'dhcp_option_type',56,'ADD',9),
+(-1,'dhcp_option_type',57,'ADD',9),
+(-1,'dhcp_option_type',58,'ADD',9),
+(-1,'dhcp_option_type',59,'ADD',9),
+(-1,'dhcp_option_type',60,'ADD',9),
+(-1,'dhcp_option_type',61,'ADD',9),
+(-1,'dhcp_option_type',62,'ADD',9),
+(-1,'dhcp_option_type',63,'ADD',9),
+(-1,'dhcp_option_type',64,'ADD',9),
+(-1,'dhcp_option_type',65,'ADD',9),
+(-1,'dhcp_option_type',66,'ADD',9),
+(-1,'dhcp_option_type',67,'ADD',9),
+(-1,'dhcp_option_type',68,'ADD',9),
+(-1,'dhcp_option_type',69,'ADD',9),
+(-1,'dhcp_option_type',70,'ADD',9),
+(-1,'dhcp_option_type',71,'ADD',9),
+(-1,'dhcp_option_type',72,'ADD',9),
+(-1,'dhcp_option_type',73,'ADD',9),
+(-1,'dhcp_option_type',74,'ADD',9),
+(-1,'dhcp_option_type',75,'ADD',9),
+(-1,'dhcp_option_type',76,'ADD',9),
+(-1,'dhcp_option_type',77,'ADD',9),
+(-1,'dhcp_option_type',78,'ADD',9),
+(-1,'dhcp_option_type',79,'ADD',9),
+(-1,'dhcp_option_type',80,'ADD',9),
+(-1,'dhcp_option_type',81,'ADD',9),
+(-1,'outlet_type',0,'READ,WRITE,ADD',9),
+(0,'outlet_type',1,'ADD',1),
+(0,'outlet_type',2,'ADD',1),
+(0,'outlet_type',3,'ADD',1),
+(0,'outlet_type',4,'ADD',1),
+(0,'outlet_type',5,'ADD',1),
+(9038,'machine',6,'READ,WRITE',1),
+(-1,'dns_resource_type',1,'ADD',9),
+(-1,'dns_resource_type',2,'ADD',9),
+(-1,'dns_resource_type',3,'ADD',9),
+(-1,'dns_resource_type',4,'ADD',9),
+(-1,'dns_resource_type',5,'ADD',9),
+(-1,'dns_resource_type',6,'ADD',9),
+(0,'outlet_type',6,'ADD',1),
+(-1,'subnet',188,'ADD',9),
+(-149,'machine',6,'READ,WRITE',5),
+(9038,'machine',5,'READ,WRITE',1),
+(0,'dns_zone',21,'ADD',1),
+(9038,'machine',1,'READ,WRITE',1),
+(-149,'machine',1,'READ,WRITE',5),
+(0,'machine',0,'ADD',1),
+(-1,'dns_zone',19,'ADD',1),
+(0,'subnet',233,'ADD',1),
+(-1,'dns_zone',16,'ADD',9),
+(-1,'dns_zone',5,'ADD',9),
+(0,'dns_zone',13,'ADD',1),
+(0,'dns_zone',14,'ADD',1),
+(-1,'dns_zone',1,'ADD',9),
+(-1,'dns_zone',3,'ADD',9),
+(-1,'dns_zone',0,'READ,WRITE,ADD',9),
+(0,'dns_zone',18,'ADD',1),
+(-1,'machine',0,'READ,WRITE,ADD',9),
+(-1,'dns_zone',20,'ADD',1),
+(0,'subnet',236,'ADD',1),
+(-1,'subnet',235,'ADD',9),
+(-1,'dns_zone',17,'ADD',9),
+(-1,'dns_zone',12,'ADD',9),
+(-1,'dns_zone',13,'ADD',9),
+(-1,'dns_zone',14,'ADD',9),
+(-1,'dns_zone',2,'ADD',9),
+(-1,'dns_zone',4,'ADD',9),
+(0,'dns_zone',0,'READ',1),
+(-1,'dns_zone',18,'ADD',9),
+(0,'dns_resource_type',2,'ADD',1),
+(0,'groups',1,'ADD',1),
+(-1,'_sys_scheduled',0,'READ,WRITE,ADD',9),
+(1,'_sys_scheduled',0,'READ,WRITE,ADD',1),
+(-1,'dns_zone',22,'ADD',1),
+(-1,'activation_queue',0,'READ,WRITE,ADD',9),
+(-1,'dhcp_option_type',82,'ADD',9),
+(-1,'dhcp_option_type',83,'ADD',9),
+(-1,'dhcp_option_type',84,'ADD',9),
+(-1,'dhcp_option_type',85,'ADD',9),
+(-1,'dhcp_option_type',86,'ADD',9),
+(-1,'dhcp_option_type',87,'ADD',9),
+(-1,'dhcp_option_type',88,'ADD',9),
+(-1,'dhcp_option_type',89,'ADD',9),
+(-1,'dhcp_option_type',90,'ADD',9),
+(-1,'dhcp_option_type',91,'ADD',9),
+(-1,'dhcp_option_type',92,'ADD',9),
+(-1,'dhcp_option_type',93,'ADD',9),
+(-1,'dhcp_option_type',94,'ADD',9),
+(-1,'dhcp_option_type',95,'ADD',9),
+(-1,'dhcp_option_type',96,'ADD',9),
+(-1,'dhcp_option_type',97,'ADD',9),
+(-1,'dhcp_option_type',98,'ADD',9),
+(-1,'dhcp_option_type',99,'ADD',9),
+(-1,'dhcp_option_type',100,'ADD',9),
+(-1,'dhcp_option_type',101,'ADD',9),
+(-1,'dhcp_option_type',102,'ADD',9),
+(-1,'dhcp_option_type',103,'ADD',9),
+(-1,'dhcp_option_type',104,'ADD',9),
+(-1,'dhcp_option_type',105,'ADD',9),
+(-1,'dhcp_option_type',106,'ADD',9),
+(-1,'dhcp_option_type',107,'ADD',9),
+(-1,'dhcp_option_type',108,'ADD',9),
+(-1,'dhcp_option_type',109,'ADD',9),
+(-1,'dhcp_option_type',110,'ADD',9),
+(-1,'dhcp_option_type',111,'ADD',9),
+(-1,'dhcp_option_type',112,'ADD',9),
+(-1,'dhcp_option_type',113,'ADD',9),
+(-1,'dhcp_option_type',114,'ADD',9),
+(-1,'dhcp_option_type',115,'ADD',9),
+(-1,'dhcp_option_type',116,'ADD',9),
+(-1,'dhcp_option_type',117,'ADD',9),
+(-1,'dhcp_option_type',118,'ADD',9),
+(-1,'dhcp_option_type',119,'ADD',9),
+(-1,'dhcp_option_type',120,'ADD',9),
+(-1,'dhcp_option_type',121,'ADD',9),
+(-1,'dhcp_option_type',122,'ADD',9),
+(-1,'dhcp_option_type',123,'ADD',9),
+(-1,'dhcp_option_type',124,'ADD',9),
+(-1,'dhcp_option_type',125,'ADD',9),
+(-1,'dhcp_option_type',126,'ADD',9),
+(-1,'dhcp_option_type',127,'ADD',9),
+(-1,'dhcp_option_type',128,'ADD',9),
+(-1,'dhcp_option_type',129,'ADD',9),
+(-1,'dhcp_option_type',130,'ADD',9),
+(-1,'dhcp_option_type',131,'ADD',9),
+(-1,'dhcp_option_type',132,'ADD',9),
+(-1,'dhcp_option_type',133,'ADD',9),
+(-1,'dhcp_option_type',134,'ADD',9),
+(-1,'dhcp_option_type',135,'ADD',9),
+(-1,'dhcp_option_type',136,'ADD',9),
+(-1,'dhcp_option_type',137,'ADD',9),
+(-1,'dhcp_option_type',138,'ADD',9),
+(-1,'dhcp_option_type',139,'ADD',9),
+(-1,'dhcp_option_type',140,'ADD',9),
+(-1,'dhcp_option_type',141,'ADD',9),
+(-1,'dhcp_option_type',142,'ADD',9),
+(-1,'dhcp_option_type',143,'ADD',9),
+(-1,'dhcp_option_type',144,'ADD',9),
+(-1,'dhcp_option_type',145,'ADD',9),
+(-1,'dhcp_option_type',146,'ADD',9),
+(-1,'dhcp_option_type',147,'ADD',9),
+(-1,'dhcp_option_type',148,'ADD',9),
+(-1,'dhcp_option_type',149,'ADD',9),
+(-1,'dhcp_option_type',150,'ADD',9),
+(-1,'dhcp_option_type',151,'ADD',9),
+(-1,'dhcp_option_type',152,'ADD',9),
+(-1,'dhcp_option_type',153,'ADD',9),
+(-1,'dhcp_option_type',154,'ADD',9),
+(-1,'dhcp_option_type',155,'ADD',9),
+(-1,'dhcp_option_type',156,'ADD',9),
+(-1,'dhcp_option_type',157,'ADD',9),
+(-1,'dhcp_option_type',158,'ADD',9),
+(-1,'dhcp_option_type',159,'ADD',9),
+(-1,'dhcp_option_type',160,'ADD',9),
+(-1,'dhcp_option_type',161,'ADD',9),
+(-1,'dhcp_option_type',162,'ADD',9),
+(-1,'dhcp_option_type',163,'ADD',9),
+(-1,'dhcp_option_type',164,'ADD',9),
+(-1,'dhcp_option_type',165,'ADD',9),
+(-1,'dhcp_option_type',166,'ADD',9),
+(-1,'dhcp_option_type',167,'ADD',9),
+(-1,'dhcp_option_type',168,'ADD',9),
+(-1,'dhcp_option_type',169,'ADD',9),
+(-1,'dhcp_option_type',170,'ADD',9),
+(-1,'dhcp_option_type',171,'ADD',9),
+(-1,'dhcp_option_type',172,'ADD',9),
+(-1,'dhcp_option_type',173,'ADD',9),
+(-1,'dhcp_option_type',174,'ADD',9),
+(-1,'dhcp_option_type',175,'ADD',9),
+(-1,'dhcp_option_type',176,'ADD',9),
+(-1,'dhcp_option_type',177,'ADD',9),
+(-1,'dhcp_option_type',178,'ADD',9),
+(-1,'dhcp_option_type',179,'ADD',9),
+(-1,'dhcp_option_type',180,'ADD',9),
+(-1,'dhcp_option_type',181,'ADD',9),
+(-1,'dhcp_option_type',182,'ADD',9),
+(-1,'dhcp_option_type',183,'ADD',9),
+(-1,'dhcp_option_type',184,'ADD',9),
+(-1,'dhcp_option_type',185,'ADD',9),
+(-1,'dhcp_option_type',186,'ADD',9),
+(-1,'dhcp_option_type',187,'ADD',9),
+(-1,'dhcp_option_type',188,'ADD',9),
+(-1,'dhcp_option_type',189,'ADD',9),
+(-1,'dhcp_option_type',190,'ADD',9),
+(-1,'dhcp_option_type',191,'ADD',9),
+(-1,'dhcp_option_type',192,'ADD',9),
+(-1,'dhcp_option_type',193,'ADD',9),
+(-1,'dhcp_option_type',194,'ADD',9),
+(-1,'dhcp_option_type',195,'ADD',9),
+(-1,'dhcp_option_type',196,'ADD',9),
+(-1,'dhcp_option_type',197,'ADD',9),
+(-1,'dhcp_option_type',198,'ADD',9),
+(-1,'dhcp_option_type',199,'ADD',9),
+(-1,'dhcp_option_type',200,'ADD',9),
+(-1,'dhcp_option_type',201,'ADD',9),
+(-1,'dhcp_option_type',202,'ADD',9),
+(-1,'dhcp_option_type',203,'ADD',9),
+(-1,'dhcp_option_type',204,'ADD',9),
+(-1,'dhcp_option_type',205,'ADD',9),
+(-1,'dhcp_option_type',206,'ADD',9),
+(-1,'dhcp_option_type',207,'ADD',9),
+(-1,'dhcp_option_type',208,'ADD',9),
+(-1,'dhcp_option_type',209,'ADD',9),
+(-1,'dhcp_option_type',210,'ADD',9),
+(-1,'dhcp_option_type',211,'ADD',9),
+(-1,'dhcp_option_type',212,'ADD',9),
+(-1,'dhcp_option_type',213,'ADD',9),
+(-1,'dhcp_option_type',214,'ADD',9),
+(-1,'dhcp_option_type',215,'ADD',9),
+(-1,'dhcp_option_type',216,'ADD',9),
+(-1,'dhcp_option_type',217,'ADD',9),
+(-1,'dhcp_option_type',218,'ADD',9),
+(-1,'dhcp_option_type',219,'ADD',9),
+(-1,'dhcp_option_type',220,'ADD',9),
+(-1,'dhcp_option_type',221,'ADD',9),
+(-1,'dhcp_option_type',222,'ADD',9),
+(-1,'dhcp_option_type',223,'ADD',9),
+(-1,'dhcp_option_type',224,'ADD',9),
+(-1,'dhcp_option_type',225,'ADD',9),
+(-1,'dhcp_option_type',226,'ADD',9),
+(-1,'dhcp_option_type',227,'ADD',9),
+(-1,'dhcp_option_type',228,'ADD',9),
+(-1,'dhcp_option_type',229,'ADD',9),
+(-1,'dhcp_option_type',230,'ADD',9),
+(-1,'dhcp_option_type',231,'ADD',9),
+(-1,'dhcp_option_type',232,'ADD',9),
+(-1,'dhcp_option_type',233,'ADD',9),
+(-1,'dhcp_option_type',234,'ADD',9),
+(-1,'dhcp_option_type',235,'ADD',9),
+(-1,'dhcp_option_type',236,'ADD',9),
+(-1,'dhcp_option_type',237,'ADD',9),
+(-1,'dhcp_option_type',238,'ADD',9),
+(-1,'dhcp_option_type',239,'ADD',9),
+(-1,'dhcp_option_type',240,'ADD',9),
+(-1,'dhcp_option_type',241,'ADD',9),
+(-1,'dhcp_option_type',242,'ADD',9),
+(-1,'dhcp_option_type',243,'ADD',9),
+(-1,'dhcp_option_type',244,'ADD',9),
+(-1,'dhcp_option_type',245,'ADD',9),
+(-1,'dhcp_option_type',246,'ADD',9),
+(-1,'dhcp_option_type',247,'ADD',9),
+(-1,'dhcp_option_type',248,'ADD',9),
+(-1,'dhcp_option_type',249,'ADD',9),
+(-1,'dhcp_option_type',250,'ADD',9),
+(-1,'dhcp_option_type',251,'ADD',9),
+(-1,'dhcp_option_type',252,'ADD',9),
+(-1,'dhcp_option_type',253,'ADD',9),
+(-1,'dhcp_option_type',254,'ADD',9),
+(-1,'dhcp_option_type',255,'ADD',9),
+(-1,'dhcp_option_type',256,'ADD',9),
+(-1,'dhcp_option_type',257,'ADD',9),
+(-1,'dhcp_option_type',258,'ADD',9),
+(9038,'machine',2,'READ,WRITE',1),
+(9038,'machine',4,'READ,WRITE',1),
+(9038,'machine',3,'READ,WRITE',1),
+(-149,'machine',4,'READ,WRITE',5),
+(-149,'machine',5,'READ,WRITE',5),
+(-149,'machine',3,'READ,WRITE',5),
+(0,'dns_zone',24,'ADD',1),
+(-1,'groups',0,'READ,WRITE,ADD',9),
+(-138,'groups',0,'READ',5),
+(0,'activation_queue',0,'READ',1),
+(-1,'dns_resource_type',7,'ADD',1),
+(-1,'dns_zone',23,'ADD',1),
+(-149,'machine',2,'READ,WRITE',5),
+(0,'groups',0,'READ',1),
+(-1,'subnet',234,'ADD',9),
+(-1,'dhcp_option_type',259,'ADD',9),
+(-1,'service_type',5,'ADD',1),
+(-1,'service_type',3,'ADD',1),
+(9038,'machine',8,'READ,WRITE',1),
+(-149,'machine',8,'READ,WRITE',5),
+(9038,'machine',7,'READ,WRITE',1),
+(-149,'machine',7,'READ,WRITE',5),
+(-1,'service',0,'READ,WRITE,ADD',9),
+(-1,'service_membership',0,'READ,WRITE,ADD',9),
+(-1,'service_type',0,'READ,WRITE,ADD',9),
+(0,'attribute',0,'READ,WRITE,ADD',1),
+(-1,'attribute',0,'READ,WRITE,ADD',9),
+(0,'attribute_spec',0,'READ',1),
+(-1,'service_type',1,'ADD',1),
+(-1,'attribute_spec',0,'READ,WRITE,ADD',1),
+(-1,'dns_zone',15,'ADD',1),
+(-1,'service',4,'ADD',1),
+(0,'groups',150,'ADD',1),
+(-150,'groups',150,'WRITE',1),
+(-150,'groups',150,'READ',5),
+(0,'groups',149,'ADD',1),
+(-149,'groups',149,'WRITE',1),
+(-149,'groups',149,'READ',5),
+(-148,'subnet',0,'READ',9),
+(0,'subnet',0,'READ',1),
+(0,'vlan',0,'READ',1),
+(-1,'subnet',0,'READ,WRITE,ADD',9),
+(-1,'vlan',0,'READ,WRITE,ADD',9),
+(-148,'groups',148,'WRITE',1),
+(-148,'groups',148,'READ',5),
+(-1,'dns_zone',6,'ADD',9),
+(-1,'service_type',6,'ADD',9),
+(-1,'service_type',7,'ADD',9),
+(-1,'service_type',8,'ADD',9),
+(-1,'service',5,'ADD',9),
+(-1,'service',6,'ADD',9),
+(-1,'dhcp_option_type',260,'ADD',9),
+(-1,'dhcp_option_type',261,'ADD',9),
+(-1,'dhcp_option_type',262,'ADD',9),
+(-1,'dhcp_option_type',263,'ADD',9),
+(-1,'dhcp_option_type',264,'ADD',9),
+(-1,'subnet_registration_modes',1,'ADD',9),
+(-1,'subnet_registration_modes',2,'ADD',9),
+(-1,'subnet_registration_modes',3,'ADD',9),
+(-1,'subnet_registration_modes',4,'ADD',9),
+(-1,'subnet_registration_modes',5,'ADD',9),
+(-1,'subnet_registration_modes',6,'ADD',9),
+(-1,'subnet_registration_modes',7,'ADD',9),
+(0,'subnet_registration_modes',2,'ADD',1),
+(0,'subnet_registration_modes',3,'ADD',1),
+(0,'subnet_registration_modes',7,'ADD',1),
+(0,'vlan_subnet_presence',0,'READ',0),
+(-1,'vlan_subnet_presence',0,'READ,WRITE,ADD',9);
+
+
+--
+-- Table structure for table 'service'
+--
+
+CREATE TABLE service (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name char(64) NOT NULL default '',
+  type int(10) unsigned NOT NULL default '0',
+  description char(255) NOT NULL default '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_name (name)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'service'
+--
+
+
+INSERT INTO service VALUES (20011228142230,4,'dhcp.example.org',5,'The main DHCP service.');
+INSERT INTO service VALUES (20020307000553,5,'Static-Servers.dns',8,'Static-Servers DNS Server Group');
+INSERT INTO service VALUES (20020307000553,6,'Dynamic-Servers.dns',8,'Dynamic-Servers DNS Server Group');
+
+--
+-- Table structure for table 'service_membership'
+--
+
+CREATE TABLE service_membership (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  service int(10) unsigned NOT NULL default '0',
+  member_type enum('activation_queue','building','cable','dns_zone','groups','machine','outlet','outlet_type','service','subnet','subnet_share','users','vlan') NOT NULL default 'activation_queue',
+  member_tid int(10) unsigned NOT NULL default '0',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_members (member_type,member_tid,service)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'service_membership'
+--
+
+
+INSERT INTO service_membership VALUES (20020307000553,1,4,'machine',3);
+INSERT INTO service_membership VALUES (20020307000553,2,4,'machine',4);
+INSERT INTO service_membership VALUES (20020307000553,3,6,'machine',3);
+INSERT INTO service_membership VALUES (20020307000553,4,6,'machine',4);
+INSERT INTO service_membership VALUES (20020307000553,5,5,'machine',1);
+INSERT INTO service_membership VALUES (20020307000553,6,5,'machine',2);
+INSERT INTO service_membership VALUES (20020307000553,7,6,'dns_zone',13);
+INSERT INTO service_membership VALUES (20020307000553,8,5,'dns_zone',18);
+INSERT INTO service_membership VALUES (20020307000553,9,5,'dns_zone',21);
+INSERT INTO service_membership VALUES (20020307000553,10,5,'dns_zone',22);
+INSERT INTO service_membership VALUES (20020307000553,11,5,'dns_zone',23);
+INSERT INTO service_membership VALUES (20020307000553,12,5,'dns_zone',24);
+INSERT INTO service_membership VALUES (20020307000553,13,5,'dns_zone',12);
+
+--
+-- Table structure for table 'service_type'
+--
+
+CREATE TABLE service_type (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name char(255) NOT NULL default '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_name (name)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'service_type'
+--
+
+
+INSERT INTO service_type VALUES (20011107021807,1,'LB_Pool');
+INSERT INTO service_type VALUES (20011109144510,3,'DDNS_Zone_Auth');
+INSERT INTO service_type VALUES (20011129153250,5,'DHCP Server Pool');
+INSERT INTO service_type VALUES (20020307000552,6,'DNS View Definition');
+INSERT INTO service_type VALUES (20020307000552,7,'DHCP Class');
+INSERT INTO service_type VALUES (20020307000552,8,'DNS Server Group');
+
+--
+-- Table structure for table 'subnet'
+--
+
+CREATE TABLE subnet (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name char(64) NOT NULL default '',
+  abbreviation char(16) NOT NULL default '',
+  base_address int(10) unsigned NOT NULL default '0',
+  network_mask int(10) unsigned NOT NULL default '0',
+  dynamic enum('permit','restrict','disallow') NOT NULL default 'permit',
+  expire_static int(10) unsigned NOT NULL default '0',
+  expire_dynamic int(10) unsigned NOT NULL default '0',
+  share int(10) unsigned NOT NULL default '0',
+  flags set('no_dhcp','delegated','prereg_subnet') default NULL,
+  default_mode enum('static','dynamic','reserved') NOT NULL default 'static',
+  purge_interval int(10) unsigned NOT NULL default '0',
+  purge_notupd int(10) unsigned NOT NULL default '0',
+  purge_notseen int(10) unsigned NOT NULL default '0',
+  purge_explen int(10) unsigned NOT NULL default '0',
+  purge_lastdone datetime NOT NULL default '0000-00-00 00:00:00',
+  vlan char(8) NOT NULL default '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_abbreviation (abbreviation),
+  UNIQUE KEY index_name (name),
+  KEY index_share (share)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'subnet'
+--
+
+
+INSERT INTO subnet VALUES (20011127112657,188,'Reserved Devices','res-dev',2130706432,4294967040,'disallow',0,0,0,'no_dhcp','static',0,0,0,0,'0000-00-00 00:00:00','0');
+INSERT INTO subnet VALUES (20011228141500,236,'Wireless','wireless',176162816,4294966784,'restrict',86400,86400,0,'','dynamic',30,30,60,15,'0000-00-00 00:00:00','0');
+INSERT INTO subnet VALUES (20011228141358,235,'Network Group','netgroup',176160896,4294967168,'permit',86400,86400,0,'','static',60,90,90,30,'0000-00-00 00:00:00','0');
+INSERT INTO subnet VALUES (20011228141250,234,'Router Backbone','backbone',176160768,4294967168,'disallow',86400,86400,0,'','static',0,0,0,0,'0000-00-00 00:00:00','0');
+INSERT INTO subnet VALUES (20011228141542,233,'Administration Network','adm-net',176161280,4294965248,'restrict',86400,86400,0,'','static',30,30,90,30,'0000-00-00 00:00:00','0');
+
+--
+-- Table structure for table 'subnet_domain'
+--
+
+CREATE TABLE subnet_domain (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  subnet int(10) unsigned NOT NULL default '0',
+  domain char(252) NOT NULL default '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_nodup (subnet,domain),
+  KEY index_subnet (subnet),
+  KEY index_domain (domain),
+  KEY id (id,domain,subnet)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'subnet_domain'
+--
+
+
+INSERT INTO subnet_domain VALUES (20020102155912,1,234,'NET.EXAMPLE.ORG');
+INSERT INTO subnet_domain VALUES (20020102155944,2,235,'NET.EXAMPLE.ORG');
+INSERT INTO subnet_domain VALUES (20020102155952,3,235,'SRV.EXAMPLE.ORG');
+INSERT INTO subnet_domain VALUES (20020102160047,4,233,'EXAMPLE.ORG');
+INSERT INTO subnet_domain VALUES (20020102160055,5,233,'REMOTE.EXAMPLE.ORG');
+INSERT INTO subnet_domain VALUES (20020102160108,6,236,'NET.EXAMPLE.ORG');
+INSERT INTO subnet_domain VALUES (20020102160112,7,236,'EXAMPLE.ORG');
+INSERT INTO subnet_domain VALUES (20020102160952,8,235,'EXAMPLE.ORG');
+
+--
+-- Table structure for table 'subnet_presence'
+--
+
+CREATE TABLE subnet_presence (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  subnet int(10) unsigned NOT NULL default '0',
+  building char(8) NOT NULL default '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_nodup (subnet,building),
+  KEY index_subnet (subnet),
+  KEY index_building (building)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'subnet_presence'
+--
+
+
+INSERT INTO subnet_presence VALUES (20011228141545,1,233,'01');
+INSERT INTO subnet_presence VALUES (20020102155903,2,234,'01');
+INSERT INTO subnet_presence VALUES (20020102155906,3,234,'05');
+INSERT INTO subnet_presence VALUES (20020102155946,4,235,'01');
+INSERT INTO subnet_presence VALUES (20020102160204,5,236,'01');
+INSERT INTO subnet_presence VALUES (20020102160210,6,236,'05');
+
+
+--
+-- Table structure for table 'subnet_registration_modes'
+--
+
+CREATE TABLE subnet_registration_modes (
+  id int(10) unsigned NOT NULL auto_increment,
+  version timestamp(14) NOT NULL,
+  subnet int(10) NOT NULL default '0',
+  mode enum('static','dynamic','reserved','broadcast','pool','base','secondary') NOT NULL default 'static',
+  mac_address enum('required','none') NOT NULL default 'required',
+  quota int(10) unsigned default NULL,
+  PRIMARY KEY  (id),
+  UNIQUE KEY subnet (subnet,mode,mac_address,quota),
+  KEY index_subnet_mode (subnet,mode)
+) TYPE=MyISAM;
+
+
+INSERT INTO subnet_registration_modes VALUES (1,200501010000,188,'reserved','none',NULL);
+INSERT INTO subnet_registration_modes VALUES (2,200501010000,236,'static','required',NULL);
+INSERT INTO subnet_registration_modes VALUES (3,200501010000,236,'dynamic','required',NULL);
+INSERT INTO subnet_registration_modes VALUES (4,200501010000,236,'pool','required',NULL);
+INSERT INTO subnet_registration_modes VALUES (5,200501010000,235,'static','required',NULL);
+INSERT INTO subnet_registration_modes VALUES (6,200501010000,234,'static','required',NULL);
+INSERT INTO subnet_registration_modes VALUES (7,200501010000,233,'static','required',NULL);
+
+
+
+--
+-- Table structure for table 'subnet_share'
+--
+
+CREATE TABLE subnet_share (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name char(64) NOT NULL default '',
+  abbreviation char(16) NOT NULL default '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_name (name),
+  UNIQUE KEY index_abbreviation (abbreviation)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'subnet_share'
+--
+
+--
+-- Table structure for table 'trunk_set'
+--
+
+CREATE TABLE trunk_set (
+  id int(10) unsigned NOT NULL auto_increment,
+  version timestamp(14) NOT NULL,
+  name char(255) NOT NULL default '',
+  abbreviation char(127) NOT NULL default '',
+  description char(255) NOT NULL default '',
+  primary_vlan int(10) NOT NULL default '1',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_name (name)
+) TYPE=MyISAM;
+
+--
+-- Table structure for table 'trunkset_building_presence'
+--
+
+CREATE TABLE trunkset_building_presence (
+  id int(10) unsigned NOT NULL auto_increment,
+  version timestamp(14) NOT NULL,
+  trunk_set int(10) NOT NULL default '0',
+  buildings int(10) NOT NULL default '0',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_nodup (trunk_set,buildings),
+  KEY index_trunkset (trunk_set),
+  KEY index_building (buildings)
+) TYPE=MyISAM;
+
+--
+-- Table structure for table 'trunkset_machine_presence'
+--
+
+CREATE TABLE trunkset_machine_presence (
+  id int(10) unsigned NOT NULL auto_increment,
+  version timestamp(14) NOT NULL,
+  device int(10) NOT NULL default '0',
+  trunk_set int(10) NOT NULL default '0',
+  last_update datetime NOT NULL default '0000-00-00 00:00:00',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_nodup (trunk_set,device),
+  KEY index_trunkset (trunk_set),
+  KEY index_vlan (device)
+) TYPE=MyISAM;
+
+--
+-- Table structure for table 'trunkset_vlan_presence'
+--
+
+CREATE TABLE trunkset_vlan_presence (
+  id int(10) unsigned NOT NULL auto_increment,
+  version timestamp(14) NOT NULL,
+  trunk_set int(10) NOT NULL default '0',
+  vlan int(10) NOT NULL default '0',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_nodup (trunk_set,vlan),
+  KEY index_trunkset (trunk_set),
+  KEY index_vlan (vlan)
+) TYPE=MyISAM;
+
+
+--
+-- Table structure for table 'users'
+--
+
+CREATE TABLE users (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  flags set('abuse','suspend') NOT NULL default '',
+  comment char(64) NOT NULL default '',
+  default_group INT UNSIGNED NOT NULL default 0,
+  PRIMARY KEY  (id)
+) TYPE=MyISAM;
+
+--
+-- Dumping data for table 'users'
+--
+
+
+INSERT INTO users VALUES (20011228123718,1,'','Network Registration System',0);
+
+--
+-- Table structure for table 'vlan'
+--
+
+CREATE TABLE vlan (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  name char(64) NOT NULL default '',
+  abbreviation char(16) NOT NULL default '',
+  number int(4) NOT NULL default '0',
+  description char(255) NOT NULL default '',
+  PRIMARY KEY (id),
+  UNIQUE KEY index_name (name)
+) TYPE=MyISAM;
+
+
+--
+-- Table structure for table 'vlan_presence'
+--
+
+CREATE TABLE vlan_presence (
+  version timestamp(14) NOT NULL,
+  id int(10) unsigned NOT NULL auto_increment,
+  vlan int(10) unsigned NOT NULL default '0',
+  building char(8) NOT NULL default '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_nodup (vlan,building),
+  KEY index_vlan (vlan),
+  KEY index_building (building)
+) TYPE=MyISAM;
+
+--
+-- Table structure for table 'vlan_subnet_presence'
+--
+
+CREATE TABLE vlan_subnet_presence (
+  id int(10) unsigned NOT NULL auto_increment,
+  version timestamp(14) NOT NULL,
+  subnet int(10) NOT NULL default '0',
+  subnet_share int(10) NOT NULL default '0',
+  vlan int(10) NOT NULL default '0',
+  PRIMARY KEY  (id),
+  UNIQUE KEY index_nodup (subnet,vlan),
+  KEY index_trunkset (subnet),
+  KEY index_vlan (vlan)
+) TYPE=MyISAM;
+
+
+
+CREATE TABLE user_type (
+ id int(10) unsigned NOT NULL auto_increment,
+ version timestamp(14) NOT NULL,
+ name varchar(64) NOT NULL default '',
+ expire_days_mach tinyint(4) not null default '7',
+ expire_days_outlet tinyint(4) not null default '7',
+ flags set('send_email_mach','send_email_outlet','disable_acct') default null,
+ PRIMARY KEY  (id),
+ UNIQUE KEY (name)
+) TYPE=MyISAM;
+
+INSERT INTO user_type VALUES
+(1,20060314133240,'General',14,14,'send_email_mach,send_email_outlet'),
+(2,20060314133240,'Internal',90,90,'send_email_mach,send_email_outlet,disable_acct'),
+(3,20060220134454,'Guest',0,0,null);
+
+INSERT INTO protections (identity, tname, tid, rights, rlevel) VALUES
+(-1,'user_type',0,'READ,WRITE,ADD', 9),
+(0,'user_type',0,'READ', 1),
+(-1,'user_type',1,'ADD', 9),
+(-1,'user_type',2,'ADD', 9),
+(-1,'user_type',3,'ADD', 9);

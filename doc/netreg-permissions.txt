@@ -1,0 +1,80 @@
+The purpose of this file will be to outline what permissions are required to
+perform various operations in the NetReg (WebInt/Netdb) system.
+
+# $Id: netreg-permissions.txt,v 1.8 2008/03/27 19:42:15 vitroth Exp $
+
+
+<Template>
+Operation:   
+Requires:    
+Enforced by: 
+Comments:    
+</Template>
+
+#
+# Section: DNS Zone
+#
+
+Operation:   View DNS Zone
+Requires:    L1 R on the zone
+Enforced by: Netdb,WebInt
+Comments:    There is a L1 R grant on the table for system:anyuser
+
+Operation:   View DNS Zone (Additional Fields)
+Requires:    L9 R on the zone
+Enforced by: WebInt
+Comments:    
+
+Operation:   Update DNS Zone
+Requires:    L9 W on the zone
+Enforced by: WebInt
+Comments:    
+
+Operation:   Add DNS Resource (for dns_zone)
+Requires:    L5 A on the zone 
+             L5 A on the specific dns_resource_type
+Enforced by: Netdb
+Comments:    
+
+Operation:   View DNS Resource (for dns_zone)
+Requires:    L1 R on the dns_resource
+Enforced by: Netdb
+Comments:    There is a L1 R grant for system:anyuser on the table
+
+Operation:   Delete DNS Resource (for dns_zone)
+Requires:    L5 A on the specific dns_resource_type
+             L5 W on dns_zone
+Enforced by: Netdb, WebInt
+Comments:    
+
+#
+# Section: Machine
+#
+
+Operation:   Change IP Address
+Requires:    L5 A on subnet
+Enforced by: Netdb, WebInt
+Comments:    
+
+#
+# Section: Service Groups
+#
+
+Operation:   Add Member to Service
+Requires:    L1 A on the service_membership table
+	     L1 A on the service
+Enforced by: Netdb
+Comments:
+
+Operation:   Delete Member from Service
+Requires:    L1 A on the service
+Enforced by: Netdb
+Comments:
+
+#
+# Section: Machines
+#
+Operation:   Update Machine IP to specific IP
+Requires:    L5 A on the subnet
+Enforced by: Netdb
+Comments:

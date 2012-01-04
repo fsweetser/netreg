@@ -1,0 +1,67 @@
+<!--#include file="header.html" -->
+<!--#include file="sidebar.html" -->
+
+<p class="c5">Outlet Activations</p>
+
+<p>When a user requests that an outlet be activatedand the system
+determines that the outlet is not pre-activated, it is placed in a
+queue based on the building that it is in.  Each technician is
+assigned one or more buildings that they are responsible for.  The
+"<b>Outlet Activation</b>" page is used to access the contents of these
+queues.</p>
+
+<h3><a name="oact_list" />Outlet Activation Query</h3>
+
+<p>To determine the activation queue to look at, you can select either to
+look at a single building, or all buildings that a particular
+technician is responsible for.</p>
+<p>Clicking on the "<b>Activation Queues</b>" link will take you to the page
+      where you can edit the definitions of the technician queues.</p>
+
+<h3><a name="oact_list_1" />Pending Activations</h3>
+
+<p>This section shows a list of all pending activation requests that
+match the query selected in the Outlet Activation Query section.  </p>
+<p>By clicking on the outlet number, you will be taken to the "<b>Outlet
+Information</b>" page.</p> <p>To complete an activation, you must select
+the type of network service that is being activated on the outlet,
+check the "<b>On</b>" box, and fill in the device and port information in the
+appropriate blanks.  To commit the changer, click on the "<b>Update</b>"
+button.  NOTE: Be sure to use the SNMP port number, not the physical
+port number when filling in this form.</p>
+
+
+<h3><a name="oact_aq_list"></a>List of Activation Queues</h3>
+
+<p>These queues are normally associated with a technician.  The queue
+name corresponds to the name of the technician.  Clicking on the name
+of a queue will allow you to edit or delete the queue.  To add a new
+queue, click on "<b>[Add Activation Queue]</b>."  If there are a large number
+of queues, you can navigate among them using the "<b>[First Page]</b>",
+"<b>[Next Page]</b>", "<b>[Last Page]</b>" and the numbered links.</p>
+
+<h3><a name="oact_aq_view"></a><a name="building"></a>Editing Queue Information</h3>
+
+<p>The name of a queue can be changed by typing the new name in the
+"<b>Queue Name</b>" field and then clicking "<b>Update</b>." This is useful when a
+new technician takes over for one leaving the group and you wish to
+transfer all building responsibilities.</p>
+
+<p>To delete the entire queue, click on "<b>[Delete Queue]</b>."  This will
+leave all buildings in the queue unassigned.  To add another building
+to the queue, select it from the pull-down menu at the bottom of the
+page and click "<b>Add Building</b>".  To delete a single building from the
+queue, click on "<b>Delete</b>" on the line corresponding to the building you
+want to remove.</p>
+
+<p>Clicking on a building will display the buildi information for that
+    building. </p>
+
+
+
+
+<!--#include file="footer.html" -->
+<!-- 
+$Id: oact_list.shtml,v 1.4 2008/03/27 19:42:27 vitroth Exp $
+-->
+

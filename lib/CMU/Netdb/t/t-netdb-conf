@@ -1,0 +1,81 @@
+## Test netdb conf
+
+MAILER = /usr/lib/sendmail
+ADMIN_ADDRESS = acs+ng.project.netdb.errors@andrew.cmu.edu
+ADMIN_NAME = NetReg Errors
+SENDER_ADDRESS = netreg@andrew.cmu.edu
+SENDER_NAME = Network Registration
+NRHOME = /home/netreg
+DHCP_SERVICE = dhcp.net.cmu.edu
+DHCP_GENPATH = $NRHOME/etc/dhcp-gen
+DHCP_XFERPATH = $NRHOME/etc/dhcp-xfer
+DHCP_RR_DNS_SERV = 128.2.1.10
+DHCP_RR_DNS_SERV = 128.2.1.11
+DHCP_NSKEY = $NRHOME/etc/zone-config/dhcpd.conf.nsaux
+DHCP_DEF_LEASETIME = 86400
+DHCP_OMSHELL = /usr/ng/bin/omshell
+RSYNC_PATH = /usr/local/bin/rsync
+RSYNC_OPTIONS = -a -v -v -v --rsync-path=$RSYNC_PATH
+RSYNC_REM_USER = ftp
+RSYNC_RSH = /usr/local/lib/ssh/bin/ssh -1 -x -i $NRHOME/etc/.identity-xfer
+DNS_GENPATH = $NRHOME/etc/zone-gen
+DNS_XFERPATH = $NRHOME/etc/zone-xfer
+DNS_CONFPATH = $NRHOME/etc/zone-config
+DNS_TOP = /usr/domain
+DNS_DBDIR = $DNS_TOP/db
+DNS_SBIN = $DNS_TOP/sbin
+DNS_VAR = $DNS_TOP/var
+DNS_ETC = $DNS_TOP/etc
+SERVICE_PATH = $NRHOME/etc/service-gen
+SERVICE_FILE = $SERVICE_PATH/services.sif
+SERVICE_COPY = $NRHOME/etc/service-xfer/services.sif
+HN_PREFIX = CMU-
+<PROTECTION_PROFILES>
+        <admin_default_add>
+                        <entries>
+                                level = 9
+                                permission = ADD
+                                id = netreg:admins
+                        </entries>
+                name = Admins May Use [Default]
+        </admin_default_add>
+        <zone_admin_default_add>
+                        <entries>
+                                level = 9
+                                permission = ADD
+                                id = netreg:admins
+                        </entries>
+                        <entries>
+                                level = 1
+                                permission = ADD
+                                id = netreg.police
+                        </entries>
+                name = Police Group May Use
+        </zone_admin_default_add>
+        <all_users_add>
+                        <entries>
+                                level = 1
+                                permission = ADD
+                                id = system:anyuser
+                        </entries>
+                name = All Users May Use
+        </all_users_add>
+        <machine_reg_default>
+                        <entries>
+                                level = 1
+                                permission = READ,WRITE
+                                id = %user%
+                        </entries>
+                        <entries>
+                                level = 5
+                                permission = READ,WRITE
+                                id = %dept%
+                        </entries>
+                name = Machine Registration Defaults
+        </machine_reg_default>
+</PROTECTION_PROFILES>
+DBMS_XACTION = 1
+MAX_CASCADE_DEPTH = 10
+AUTHBRIDGE_SUSPEND = 1
+AUTHBRIDGE_CONFIG_FILE = /home/netreg/etc/authbridge-suspend.conf
+AUTHBRIDGE_DEL_COMMAND = DEL

@@ -1,0 +1,17 @@
+<subnet %>
+   machines yes
+   dns_zones yes
+   vlans yes
+</subnet>
+
+<dns_zone %>
+   machines no
+   keys yes
+</dns_zone>
+
+<group %>
+</group>
+
+<service %>
+</service>
+

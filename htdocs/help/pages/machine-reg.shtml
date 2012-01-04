@@ -1,0 +1,127 @@
+<!--#include file="header.html" -->
+<!--#include file="sidebar.html" -->
+<p class="c5">Registering a Machine</p>
+
+<p>A machine must be registered properly before it can establish a
+connection with the network. The following takes you through this
+process step-by-step.</p>
+
+<p>To register a machine, click on <b>[Register New Machine]</b> on
+the Main page of the Network Registration System.</p>
+
+<h3><a name="location"></a>Step 1. Selecting the Location</h3>
+
+<p>The first page displayed when registering a machine asks you
+where this machine will be used. You can specify the location in
+one of three ways:</p>
+
+<p><a name="network"></a><b>By Network<br>
+</b>This option is only used if you're registering a machine that
+will be connected to a priority network listed in the By Network
+section. Because some networks are popular options, they can
+be listed separately in this area.
+
+<p>To register a machine for one of these priority networks,
+select the appropriate network from the drop-down menu and
+click on the Continue button to the right of it. The Machine
+Information page will be displayed.</p>
+
+<p><a name="building"></a><b>By Building<br>
+</b>If you will be connecting your machine to a data outlet in a
+campus building, select the building from the drop-down menu and
+click on the Continue button to the right of it. If only one subnet
+is available for the building you selected, the Machine Information
+page will be displayed. If more than one subnet is available, a
+page listing the subnets available in your building will be
+displayed.</p>
+
+<p>For information on selecting a subnet within your building, see
+<a href="#mach_reg_s1">Selecting a Building Subnet</a>.</p>
+
+<p><b>By Subnet<br>
+</b>If you know the name of the subnet to which you will be
+connecting the machine, select the subnet from the drop-down menu
+and click on the Continue button to the right of it. The Machine
+Information page will be displayed.</p>
+
+<p>&nbsp;</p>
+
+<h3><a name="mach_reg_s1"></a>Step 1a: Selecting a Building Subnet</h3>
+
+<p>Many buildings have only one subnet option. If you are
+registering a machine in one of those buildings, you will be taken
+directly to the Machine Information page and do not need to worry
+about this step.</p>
+
+<p>However, if your building has more than one subnet, you will
+need to indicate to which subnet your machine should be connected.
+Simply select the subnet from the pull-down menu and click the
+Continue button.</p>
+
+<p>Almost every building has a subnet that is named after the
+building. For example, in the drop-down menu for a particular building,
+there is a subnet for this building listed.
+<b>Unless you know that you should
+use one of the other subnets listed, you should select the subnet
+that is named after your building.</b> If you are in doubt about
+which subnet you should select, contact your departmental
+administrator or the computing help desk.</p>
+
+<h3><a name="mach_reg_s2"></a>Step 2: Entering Machine
+Information</h3>
+
+<p>Once you have identified the subnet location for your machine,
+the Machine Information page is displayed. You need to enter the
+information on this page so that your computer can be registered
+and enabled on the network.</p>
+
+<p>Complete the following fields on this page (click on a field
+name for a description):</p>
+
+<ul>
+<li><a href="../definitions/host_name.shtml" target="_blank">Hostname</a>
+(<a href="../definitions/shortname.shtml" target="_blank">Short Name</a>
+and <a href="../definitions/domain.shtml" target="_blank">Domain</a>)</li>
+
+<li><a href="../definitions/mode.shtml" target="_blank">Mode</a></li>
+
+<li><a href="../definitions/mac_address.shtml" target="_blank">Hardware
+    Address</a></li>
+
+<li><a href="../definitions/department.shtml" target="_blank">Affiliation</a></li>
+</ul>
+<br>
+<br>
+
+<h3><a name="protections"></a>Step 3: Setting Protections</h3>
+
+<p>If you maintain machine registrations for other users, a
+Protections section will be displayed on the Machine Information
+page. Your user ID will be listed with Read and Write access
+checked by default. Any groups of which you are a member will also
+be listed with no access rights checked by default.</p>
+
+<p>If you are registering this machine for another user, you might
+want to uncheck the Read and Write rights for yourself and,
+instead, give Read and Write access to the group of which you are a
+member. That way, your User ID will not be associated directly with
+the machine.</p>
+
+<p>If you are registering the machine for another user, you might
+also want to edit the machine after you've registered it and add
+the user who will be using the machine to the protections list. See
+<a href="protections.shtml">Setting Protections</a> for more
+information.</p>
+
+<h3><a name="submit-reg"></a>Step 4: Submit the Registration</h3>
+
+<p>When you have completed all fields on the Machine Information
+page, click on the Continue button to submit the registration
+request. If there are no problems with the values you entered, your
+registration request will be submitted and you should be able to
+access the network with the registered machine within two
+hours.</p>
+<!--#include file="footer.html" -->
+<!-- 
+$Id: machine-reg.shtml,v 1.6 2008/03/27 19:42:27 vitroth Exp $
+-->

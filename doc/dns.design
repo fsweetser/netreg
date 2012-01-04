@@ -1,0 +1,20 @@
+* Load all records from the machine
+ * Non-DDNS zones: just spew the zonefile and we're done
+ * DDNS Zones: Call ddns_prepare_zone
+
+
+* ddns_prepare_zone
+  * Dig current zone file, load into structure
+  * Foreach machine record:
+      For all static/pool hosts:
+        - if we have a matching RR + TXT, delete 
+          RR and TXT from Dig structure
+        - if no match, then schedule an addition of RR + TXT
+    
+  * For all remaining members of Dig structure
+      - if we have a TXT record for an RR, schedule a deletion of the RR + TXT
+      - if no TXT record, ignore
+  * Back-set zone serial #
+
+---
+$Id: dns.design,v 1.2 2008/03/27 19:42:14 vitroth Exp $

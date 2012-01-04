@@ -1,0 +1,42 @@
+<!--#include file="header.html" -->
+<!--#include file="sidebar.html" -->
+<p class="c5">About the Network Registration System</p>
+
+<p>Before you can connect your computer to the campus network, you
+must register certain information about it so that it can be
+identified and assigned an IP address. In some cases, you need only
+register your machine. If you will be 
+using a data outlet for your connection, the outlet to which you
+will connect may need to be activated as well.</p>
+
+<h3>Managing Your Machines and Outlets</h3>
+
+<p>If you are a business administrator or if you support computers
+for a department or workgroup, you use this system to register
+machines and data outlets for yourself. Other people, such as a
+business administrator, a computing support person for your
+department, or someone else that you designate may also have access
+to view and or change your machine and outlet registrations.</p>
+
+<h3>Managing Machines and Outlets for a Group</h3>
+
+<p>If you are a business administrator or if you support computers
+for a department or workgroup, you can use this system to
+administrate machines for the people you support as well as your
+own machines and outlets.</p>
+
+<h3>The Relationship Between Machines and Outlets</h3>
+
+<p>There really is no relationship between machines and outlets
+except that if a machine is to be connected to an outlet, the
+outlet must be activated.</p>
+
+<p>However, a machine's registration is specific to a subnet. No
+network connection will be possible if the computer is connected to
+a data outlet (even an active one) outside the subnet in which the
+machine is registered.</p>
+
+<!--#include file="footer.html" -->
+<!-- 
+$Id: about-netreg.shtml,v 1.2 2008/03/27 19:42:23 vitroth Exp $
+-->

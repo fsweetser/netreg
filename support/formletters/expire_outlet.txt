@@ -1,0 +1,17 @@
+You are receiving this message because our records show that as of %CURRENT_DATE% the following outlet registration was assigned to an inactive Andrew account. You are listed as the departmental administrator or a system administrator for the group that owns this outlet.
+
+Previous Owner: %USER%
+Outlet Number: %OUTLET_NUM%
+Building:      %OUTLET_BUILDING%
+Room:          %OUTLET_ROOM%
+
+This outlet will be removed from the network if it is not registered to a user with a valid Andrew User ID by %EXPIRE_DATE%. 
+
+If there are outlets marked for expiration which are still valid registrations, you must visit this page and click the "Retain" link for each appropriate outlet:
+
+https://netreg.net.cmu.edu/bin/netreg.pl?op=outlets_expire_list
+
+If this outlet is no longer in use, no action is necessary and the outlet registration will be purged on %EXPIRE_DATE%.
+
+Please direct any questions or comments to the Computing Services Help Center at x8-HELP or advisor@andrew.cmu.edu.
+

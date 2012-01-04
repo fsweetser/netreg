@@ -1,0 +1,1156 @@
+#! /usr/bin/perl 
+#
+# Copyright 2004 Duke University. All rights reserved.
+# This script is licensed under the same license as the remainder of the
+# CMU-NetReg system.
+#
+# Kevin Miller - 3 Oct 2004 - Initial release.
+#
+
+use strict;
+
+use CMU::Netdb;
+use CMU::Netdb::config;
+use Data::Dumper;
+use Getopt::Long;
+use DNS::ZoneParse;
+use DBI;
+use Text::ParseWords;
+
+my $Version = '1.0';
+
+my @Modes = qw/deptadd useradd buildingadd subnetadd dnsimport/;
+
+my %options;
+my $res = GetOptions (\%options, "help|h|usage",
+# modes
+		      @Modes,
+
+# global
+		      'netreguser=s', 'quiet!', 'debug!', 'atomic!',
+
+# dnsimport
+		      'user=s', 'dept=s',
+# subnetadd
+		      'reqstaticmac!',
+
+		      )
+    or usage();
+
+usage() if (defined $options{'help'} && $options{'help'} == 1);
+
+my $MCount = 0;
+foreach my $M (@Modes) {
+    $MCount++ if (defined $options{$M} && $options{$M});
+}
+die "More than one operation mode specified!" if ($MCount > 1);
+if ($MCount != 1) {
+    warn "No operation mode specified!";
+    usage();
+}
+
+$options{'debug'} = 0 unless (defined $options{'debug'});
+$options{'quiet'} = 0 unless (defined $options{'quiet'});
+$options{'netreguser'} = 'netreg' unless (defined $options{'netreguser'});
+$options{'atomic'} = 0 unless (defined $options{'atomic'});
+
+# Connect to the database
+my $dbp = db_connect();
+my $dbh = DBI->connect($dbp->{'connect'}, $dbp->{'user'}, $dbp->{'pass'});
+
+CMU::Netdb::xaction_begin($dbh) if ($options{'atomic'});
+
+foreach my $M (@Modes) {
+    no strict;
+    $M->($dbh) if (defined $options{$M} && $options{$M});
+}
+
+CMU::Netdb::xaction_commit($dbh) if ($options{'atomic'});
+
+exit 0;
+
+sub deptadd {
+    my ($dbh) = @_;
+
+    while(my $line = <STDIN>) {
+	next if ($line =~ /^\s*\#/);
+
+	my ($deptid, $name) = shellwords($line);
+	unless ($deptid =~ /^dept\:\S+$/) {
+	    warn "Department ID should be of the form 'dept:FOO'"
+		unless ($options{'quiet'});
+	    next;
+	}
+
+	my %Group = ('name' => $deptid,
+		     'description' => $name);
+
+	print "Adding group $deptid/$name\n" if ($options{'debug'});
+	netreg_add_group($dbh, \%Group);
+    }
+}
+
+sub useradd { 
+    my ($dbh) = @_;
+
+    while(my $line = <STDIN>) {
+	next if ($line =~ /^\s*\#/);
+
+	my ($authid, $name) = shellwords($line);
+	my %User = ('authid' => $authid,
+		    'description' => $name,
+		);
+	
+	print "Adding user $authid/$name\n" if ($options{'debug'});
+	netreg_add_user($dbh, \%User);
+    }
+}
+
+sub buildingadd { 
+    my ($dbh) = @_;
+
+    while(my $line = <STDIN>) {
+	next if ($line =~ /^\s*\#/);
+
+	my ($id, $abbrev, $name) = shellwords($line);
+	my %Building = {'name' => $name,
+			'abbreviation' => $abbrev,
+			'building' => $id};
+	print "Adding building $id/$abbrev/$name\n" if ($options{'debug'});
+	netreg_add_building($dbh, \%Building);
+    }
+}
+
+sub subnetadd { 
+    my ($dbh) = @_;
+
+    my $rSubnets = netreg_get_subnets($dbh);
+
+    while(my $line = <STDIN>) {
+	next if ($line =~ /^\s*\#/);
+
+	my ($abbrev, $name, $base, $mask, $delegated) = shellwords($line);
+	$delegated = 0 unless (defined $delegated); 
+
+	# Strip spacing
+	$name =~ s/^\s*//;
+	$name =~ s/\s*$//;
+
+	my $xbase = CMU::Netdb::helper::dot2long($base);
+	my $xmask = CMU::Netdb::helper::dot2long($mask);
+
+	# See if we have this subnet already
+	my $rSubnet = netreg_get_subnet_by_ip($dbh, $base);
+	if (ref $rSubnet) {
+	    if ($rSubnet->{'subnet.base_address'} ne $xbase ||
+		$rSubnet->{'subnet.network_mask'} ne $xmask) {
+		warn "Subnet difference: \n".
+		    '|'.$rSubnet->{'subnet.base_address'}.'|'.$xbase."|\n".
+		    '|'.$rSubnet->{'subnet.network_mask'}.'|'.$xmask."|\n"
+		unless ($options{'quiet'});
+	    }
+	    next;
+	}
+
+	# Verify uniqueness of name and abbreviation
+	if (grep { uc($_->{'subnet.abbreviation'}) eq uc($abbrev)} values %$rSubnets) {
+	    my $ctr = 1;
+	    my $xabbrev;
+	    do {
+		$ctr++;
+		$xabbrev = $abbrev.$ctr;
+	    } while (grep { uc($_->{'subnet.abbreviation'}) eq uc($xabbrev)} values %$rSubnets);
+	    $abbrev = $xabbrev;
+	}
+
+	if (grep { uc($_->{'subnet.name'}) eq uc($name)} values %$rSubnets) {
+	    my $ctr = 1;
+	    my $xname;
+	    do {
+		$ctr++;
+		$xname = $name.' '.$ctr;
+	    } while (grep { uc($_->{'subnet.name'}) eq uc($xname)} values %$rSubnets);
+	    $name = $xname;
+	}
+
+	# No current subnet, add it..
+	print "Adding subnet $name/$abbrev/$base/$mask\n"
+	    if ($options{'debug'});
+
+	my %Subnet = ('name' => $name,
+		      'abbreviation' => $abbrev,
+		      'base_address' => $base,
+		      'network_mask' => $mask,
+		      'share' => 0,
+		      'default_mode' => 'static',
+		      'dynamic' => 'restrict');
+
+	# Add to the list so we can continue verifying uniqueness
+	$rSubnets->{$name} = {'subnet.name' => $name,
+			      'subnet.abbreviation' => $abbrev,
+			  };
+
+	netreg_add_subnet($dbh, \%Subnet);
+
+	# Add basic DNS zone information for this subnet
+	# Develop a list of the reverse zones
+	my $xbase = CMU::Netdb::dot2long($base);
+	my $xmask = CMU::Netdb::dot2long($mask);
+	my $xend = $xbase | (~$xmask);
+	my $tbase = $xbase >> 8;
+	my $tend = $xend >> 8;
+
+	my @Zones;
+	for my $i ($tbase..$tend) {
+	    my $zbase = CMU::Netdb::long2dot($i<<8);
+	    $zbase =~ /(\d+)\.(\d+)\.(\d+)\.(\d+)/;
+	    push(@Zones, "$3.$2.$1.IN-ADDR.ARPA");
+	}
+
+	foreach my $Z (@Zones) {
+	    # See if the zones already exist
+	    my $rZone = netreg_get_zone($dbh, $Z);
+	    next if (ref $rZone);
+
+	    # Zone doesn't exist
+	    # If delegated, just create a rv-permissible zone
+	    if ($delegated) {
+		netreg_add_permissible_zone($dbh, $Z);
+		next;
+	    }
+
+	    # Not delegated, try to transfer the zone
+	    my %ImportInfo;
+	    dnsimport_axfr($Z, \%ImportInfo);
+
+	    if (defined $ImportInfo{'rr'}->{'SOA'}) {
+		# Found zone information, add the zone
+		foreach my $RR (keys %{$ImportInfo{'rr'}}) {
+		    delete $ImportInfo{'rr'}->{$RR} unless (uc($RR) eq 'SOA');
+
+		}
+		dnsimport_exec($dbh, \%ImportInfo);
+		next;
+	    }
+
+	    print "No zone information found for: $Z; ".
+		"adding permissible zone\n"
+		if ($options{'debug'});
+
+	    # Couldn't get zone information; just add rv-permissible
+	    netreg_add_permissible_zone($dbh, $Z);
+	}
+    }
+}
+
+sub dnsimport {
+    my ($dbh) = @_;
+
+    die "--user must be specified for machine registrations"
+	unless (defined $options{'user'} && $options{'user'} ne '');
+    die "--dept must be specified for machine registrations"
+	unless (defined $options{'dept'} && $options{'dept'} ne '');
+
+    my %ImportInfo;
+
+    while(my $line = <STDIN>) {
+	next if ($line =~ /^\s*\#/);
+
+	my ($zone, $method, $extra) = split(/\s+/, $line, 3);
+
+	if ($method eq 'file') {
+	    unless (-r $extra) {
+		warn "Import method 'file', file ($extra) not readable"
+		    unless ($options{'quiet'});
+		next;
+	    }
+	    print "Importing $zone via file: $extra\n" if ($options{'debug'});
+
+	    dnsimport_file($zone, $extra, \%ImportInfo);
+	}elsif($method eq 'axfr') {
+	    print "Importing $zone via zone transfer\n" if ($options{'debug'});
+
+	    dnsimport_axfr($zone, \%ImportInfo);
+	}elsif($method eq 'axfr_zoneonly') {
+	    print "Importing $zone (only) via zone transfer\n" 
+		if ($options{'debug'});
+
+	    dnsimport_axfr($zone, \%ImportInfo);
+	    foreach my $RR (keys %{$ImportInfo{'rr'}}) {
+		delete $ImportInfo{'rr'}->{$RR} unless (uc($RR) eq 'SOA');
+
+	    }
+	}else{
+	    warn "Unknown import method: $method"
+		unless ($options{'quiet'});
+	    next;
+	}
+    }
+    dnsimport_exec($dbh, \%ImportInfo);
+}
+
+sub dnsimport_file {
+    my ($zone, $file, $rImportInfo) = @_;
+
+    my $Zone = new DNS::ZoneParse();
+    $Zone->Set_Debug(50) if ($options{'debug'});
+
+    $Zone->Prepare($file, $zone, 86400);
+    my $Contents = $Zone->Get_Zone();
+
+    foreach my $Label (keys %$Contents) {
+	foreach my $Record (@{$Contents->{$Label}}) {
+	    next unless ($Record->{'class'} eq 'IN');
+	    push(@{$rImportInfo->{'rr'}->{$Record->{'type'}}->{$Label}},
+		 $Record);
+	}
+    }
+}
+
+sub dnsimport_axfr {
+    my ($zone, $rImportInfo) = @_;
+
+    my $Zone = new DNS::ZoneParse();
+    $Zone->Set_Debug(50) if ($options{'debug'});
+
+    my @Servers;
+    my $S = $Zone->find_master($zone);
+    push(@Servers, $S) if (defined $S && $S ne '');
+
+    # Find NS records
+    my $Res = Net::DNS::Resolver->new;
+    my $packet = $Res->search($zone, 'NS');
+    if (defined $packet) {
+	foreach my $R ($packet->answer()) {
+	    my $S = $R->nsdname;
+	    push(@Servers, $S) if ($S ne '');
+	}
+    }
+
+    foreach my $server (@Servers) {
+	$Zone->Prepare('dig:'.$zone.'@'.$server, $zone, 86400);
+    
+	my $Contents = $Zone->Get_Zone();
+
+	next if (scalar(keys %$Contents) == 0);
+
+	foreach my $Label (keys %$Contents) {
+	    foreach my $Record (@{$Contents->{$Label}}) {
+		next unless ($Record->{'class'} eq 'IN');
+		push(@{$rImportInfo->{'rr'}->{$Record->{'type'}}->{$Label}},
+		     $Record);
+	    }
+	}
+	return;
+    }
+}
+
+# Using the ImportInfo, perform the actual updates
+sub dnsimport_exec {
+    my ($dbh, $rII) = @_;
+
+    my %ZonesReady;
+    # First get all the SOA records and make sure the proper zones exist
+
+    foreach my $Label (keys %{$rII->{'rr'}->{'SOA'}}) {
+	if (scalar(@{$rII->{'rr'}->{'SOA'}->{$Label}}) > 1) {
+	    warn "Multiple SOA records for $Label!"
+		unless ($options{'quiet'});
+	    next;
+	}
+
+	my $Name = $Label;
+	$Name =~ s/\.$//;
+
+	# Mock up a new zone
+	my @rd = split(/\s+/, $rII->{'rr'}->{'SOA'}->{$Label}->[0]->{'rdata'});
+
+	# Adjust soa_email
+	$rd[1] =~ s/\.$//;
+
+	my %Zone = ('name' => $Name,
+		    'type' => ($Label =~ /in-addr.arpa/i ? 'rv-toplevel' : 'fw-toplevel'),
+		    'soa_host' => $rd[0],
+		    'soa_email' => $rd[1],
+		    'soa_serial' => $rd[2],
+		    'soa_refresh' => $rd[3],
+		    'soa_retry' => $rd[4],
+		    'soa_expire' => $rd[5],
+		    'soa_minimum' => $rd[6],
+		    'soa_default' => $rd[7]
+		    );
+		    
+	print "Checking SOA record of $Label\n" if ($options{'debug'});
+
+	# See if the zone exists. If so, we'll compare the values and
+	# modify if necessary.
+	my $rZone = netreg_get_zone($dbh, $Name);
+
+	# The zone doesn't exist, so just add it.
+	unless (ref $rZone) {
+	    netreg_add_zone($dbh,\%Zone);
+	}else{
+	    # Exists already, see if it matches
+	    my $Match = 1;
+	    foreach my $field (keys %Zone) {
+		unless (defined $rZone->{'dns_zone.'.$field}) {
+		    warn "Zone $Label field $field not defined!"
+			unless ($options{'quiet'});
+		}
+		$Match = 0 if (defined $rZone->{'dns_zone.'.$field} && 
+			       $rZone->{'dns_zone.'.$field} ne $Zone{$field});
+	    }
+
+	    unless ($Match) {
+		# Something is different; update the zone
+		netreg_modify_zone($dbh, $rZone->{'dns_zone.id'}, 
+				   $rZone->{'dns_zone.version'},
+				   \%Zone);
+	    }
+	}		   
+
+	$ZonesReady{uc($Label)} = 1;
+    }
+
+    # Next find all the zones needed (including subzones), adding any
+    # as necessary
+    my %AllZones;
+    map { my ($h, $d) = split(/\./, $_, 2); 
+	  $AllZones{$d}++;
+      } map { keys %{$rII->{'rr'}->{$_}} } keys %{$rII->{'rr'}};
+
+    foreach my $Z (keys %AllZones) {
+	# Have we already dealt with this?
+	next if (defined $ZonesReady{uc($Z)});
+
+	# See if it exists
+	my $rZone = netreg_get_zone($dbh, $Z);
+
+	if (ref $rZone) {
+	    $ZonesReady{uc($Z)} = 1;
+	    next;
+	}
+
+	netreg_add_permissible_zone($dbh, $Z);
+
+	$ZonesReady{uc($Z)} = 1;
+    }
+
+    # Scan the A record list and break up any multiple A record ones, so that
+    # we end up creating ANAMEs
+    foreach my $Label (keys %{$rII->{'rr'}->{'A'}}) {
+	next unless (scalar(@{$rII->{'rr'}->{'A'}->{$Label}}) > 1);
+
+	# Manufacture a unique hostname and put those in the A list,
+	# then the real name as an ANAME
+	my $rRecs = $rII->{'rr'}->{'A'}->{$Label};
+	delete $rII->{'rr'}->{'A'}->{$Label};
+
+	foreach my $Rec (@$rRecs) {
+	    my ($H, $D) = split(/\./, $Label, 2);
+
+	    # Manufacture a new hostname
+	    my $newHN = $H.'-'.$Rec->{'rdata'};
+	    $newHN =~ s/\./\_/g;
+	    push(@{$rII->{'rr'}->{'A'}->{"$newHN.$D"}}, $Rec);
+
+	    push(@{$rII->{'rr'}->{'ANAME'}->{"$newHN.$D"}},
+		 {'ttl' => $Rec->{'ttl'},
+		  'class' => 'IN',
+		  'type' => 'ANAME',
+		  'rdata' => $Label});
+	}
+    }
+
+    # Get a list of all the existing machines
+    my $rMach = netreg_list_all_machines($dbh);
+
+    # Now go through the A records, comparing to the existing machines.
+    foreach my $Label (keys %{$rII->{'rr'}->{'A'}}) {
+	# Should only be 1 record, since we've split multiple ones above.
+	my $IP = $rII->{'rr'}->{'A'}->{$Label}->[0]->{'rdata'};
+
+	$Label =~ s/\.$//;
+
+	if (!defined $rMach->{$Label}) {
+	    # Add a new machine
+	    my $subnet = netreg_get_subnet_by_ip($dbh, $IP);
+	    unless (ref $subnet) {
+		warn "No subnet found for IP $IP, skipping $Label"
+		    unless ($options{'quiet'});
+		next;
+	    }
+
+	    my %Machine = ('host_name' => $Label,
+			   'ip_address' => $IP,
+			   'mode' => 'static',
+			   'ip_address_subnet' => $subnet->{'subnet.id'},
+			   );
+	    print "Adding machine $Label ($IP)\n" if ($options{'debug'});
+
+	    netreg_add_machine($dbh, \%Machine);
+	    next;
+	}
+
+	# Machine already exists. Verify the IP
+	my $recIP = CMU::Netdb::helper::long2dot($rMach->{$Label}->{'machine.ip_address'});
+	my $Match = 1;
+	if ($IP ne $recIP) {
+	    $Match = 0;
+	    $rMach->{$Label}->{'machine.ip_address'} = $IP if ($IP ne $recIP);
+	}
+
+	if ($rMach->{$Label}->{'machine.mode'} ne 'static') {
+	    $Match = 0;
+	    $rMach->{$Label}->{'machine.mode'} = 'static';
+	}
+
+	if ($Match == 0) {
+	    print "Modifying machine $Label\n" if ($options{'debug'});
+	    netreg_update_machine($dbh, $rMach->{$Label});
+	}
+    }
+
+    # Get a new list of all the existing machines.
+    $rMach = netreg_list_all_machines($dbh);
+
+    # Go through PTRs, comparing to machines. 
+    foreach my $Label (keys %{$rII->{'rr'}->{'PTR'}}) {
+	if (scalar(@{$rII->{'rr'}->{'PTR'}}) > 1) {
+	    warn "Unable to handle multiple PTRs for a single label"
+		unless ($options{'quiet'});
+	}
+		
+	my $HN = uc($rII->{'rr'}->{'PTR'}->[0]->{'rdata'});
+	my $Label =~ /(\d+)\.(\d+)\.(\d+)\.(\d+)\./;
+	my $LIP = "$4.$3.$2.$1";
+
+	if (!defined $rMach->{$HN}) {
+	    # Add a machine for it.
+	    my $subnet = netreg_get_subnet_by_ip($dbh, $LIP);
+	    unless (ref $subnet) {
+		warn "No subnet found for IP $LIP, skipping $Label"
+		    unless ($options{'quiet'});
+		next;
+	    }
+	    my %Machine = ('host_name' => $HN,
+			   'ip_address' => $LIP,
+			   'mode' => 'static',
+			   'ip_address_subnet' => $subnet->{'subnet.id'});
+
+	    print "Adding machine $HN ($LIP) from PTR\n"
+		if ($options{'debug'});
+
+	    netreg_add_machine($dbh, \%Machine);
+	    
+	    next;
+	}
+	   
+	# Do the IPs match?
+	my $Label =~ /(\d+)\.(\d+)\.(\d+)\.(\d+)\./;
+	my $LIP = "$4.$3.$2.$1";
+	my $recIP = CMU::Netdb::helper::long2dot
+	    ($rMach->{$HN}->{'machine.ip_address'});
+	if ($LIP ne $recIP) {
+	    warn "PTR record doesn't match machine ($HN): ".
+		"PTR=$LIP, machine=$recIP"
+		unless ($options{'quiet'});
+	}
+    }
+
+    # Go through HINFO and TXT, attaching as comments to machines
+    foreach my $rr (qw/HINFO TXT/) {
+	foreach my $Label (keys %{$rII->{'rr'}->{$rr}}) {
+	    my $Name = $Label;
+
+	    $Name =~ s/\.$//;
+	    if (!defined $rMach->{$Name}) {
+		warn "$rr RR but no machine for: $Label"
+		    unless ($options{'quiet'});
+		next;
+	    }
+
+	    my $txt = join('; ',
+			   map { $_->{'rdata'} } @{$rII->{'rr'}->{$rr}->{$Label}});
+	    $rMach->{$Name}->{'machine.comment_lvl1'} .= ' '.$txt;
+	    netreg_update_machine($dbh, $rMach->{$Name});
+	}
+    }	
+
+    # List the current DNS resources
+    my $rExResources = netreg_list_all_dns_resources($dbh);
+    unless (ref $rExResources) {
+	die "Error listing dns resources";
+    }
+
+    # Go through NS & MX, attaching to zones
+    foreach my $rr (qw/NS MX/) {
+	foreach my $Label (keys %{$rII->{'rr'}->{$rr}}) {
+	    my $ULabel = uc($Label);
+	    next if ($rr eq 'MX' && !$ZonesReady{$ULabel});
+	    if ($rr eq 'NS' && !$ZonesReady{$ULabel}) {
+		warn "No zone for NS record ($Label)!"
+		    unless ($options{'quiet'});
+		next;
+	    }
+	    foreach my $Rec (@{$rII->{'rr'}->{$rr}->{$Label}}) {
+		# Determine if the record already exists.
+		# If not, add it.
+		next if (defined $rExResources->{$rr}->{$ULabel}
+			 ->{uc($Rec->{'rdata'})});
+		
+		my $rMach = netreg_get_machine_by_hostname($dbh, 
+							   $Rec->{'rdata'});
+		unless (ref $rMach) {
+		    warn "Error getting machine information for: ".
+			$Rec->{'rdata'} unless ($options{'quiet'});
+		    next;
+		}
+		my $rZone = netreg_get_zone($dbh, $Label);
+		unless (ref $rZone) {
+		    warn "Error getting zone information for: $Label"
+			unless ($options{'quiet'});
+		    next;
+		}
+			
+		my %Resource = ('name' => $Label,
+				'ttl' => $Rec->{'ttl'},
+				'type' => $rr,
+				'rname' => $Rec->{'rdata'},
+				'name_zone' => $rZone->{'dns_zone.id'},
+				'owner_type' => 'dns_zone',
+				'owner_tid' => $rZone->{'dns_zone.id'},
+				'rname_tid' => $rMach->{'machine.id'},
+			    );
+		netreg_add_dns_resource($dbh, \%Resource);
+	    }
+	}
+    }
+
+    # Go through MX & CNAME, attaching to machines
+    # First MX
+    foreach my $Label (keys %{$rII->{'rr'}->{'MX'}}) {
+	my $ULabel = uc($Label);
+	next if ($ZonesReady{$ULabel});
+
+	foreach my $Rec (@{$rII->{'rr'}->{'MX'}->{$Label}}) {
+	    # Skip if the record already exists.
+	    next if (defined $rExResources->{'MX'}->{$ULabel}
+		     ->{uc($Rec->{'rdata'})});
+
+	    my $rMach = netreg_get_machine_by_hostname($dbh, $Label);
+	    unless (ref $rMach) {
+		warn "Error getting machine information for: $Label"
+		    unless ($options{'quiet'});
+		next;
+	    }
+
+	    my %Resource = ('name' => $Label,
+			    'ttl' => $Rec->{'ttl'},
+			    'type' => 'MX',
+			    'rname' => $Rec->{'rdata'},
+			    'owner_type' => 'machine',
+			    'owner_tid' => $rMach->{'machine.id'},
+			);
+	    netreg_add_dns_resource($dbh, \%Resource);
+	}
+    }
+
+    # CNAME
+    foreach my $Label (keys %{$rII->{'rr'}->{'CNAME'}}) {
+	my $ULabel = uc ($Label);
+	next if ($ZonesReady{$ULabel});
+	
+	if (scalar(@{$rII->{'rr'}->{'CNAME'}->{$Label}}) > 1) {
+	    warn "Only one CNAME for a label permissible" 
+		unless $options{'quiet'};
+	}
+
+	my $Rec = $rII->{'rr'}->{'CNAME'}->{$Label}->[0];
+
+	# Skip if the record already exists
+	next if (defined $rExResources->{'MX'}->{$ULabel}
+		 ->{uc($Rec->{'rdata'})});
+	
+	my $rMach = netreg_get_machine_by_hostname($dbh, $Rec->{'rdata'});
+	unless (ref $rMach) {
+	    warn "Error getting machine information for: ".
+		$Rec->{'rdata'} unless ($options{'quiet'});
+	    next;
+	}
+	    
+	my %Resource = ('name' => $Label,
+			'ttl' => $Rec->{'ttl'},
+			'type' => 'CNAME',
+			'rname' => $Rec->{'rdata'},
+			'owner_type' => 'machine',
+			'owner_tid' => $rMach->{'machine.id'},
+		    );
+	netreg_add_dns_resource($dbh, \%Resource);
+    }
+
+    # Setup ANAMEs
+    foreach my $Label (keys %{$rII->{'rr'}->{'ANAME'}}) {
+	my $ULabel = uc($Label);
+
+	foreach my $Rec (@{$rII->{'rr'}->{'ANAME'}->{$Label}}) {
+	    # Skip if the record already exists.
+	    next if (defined $rExResources->{'ANAME'}->{$ULabel}
+		     ->{uc($Rec->{'rdata'})});
+
+	    my $rMach = netreg_get_machine_by_hostname($dbh, $Rec->{'rdata'});
+	    unless (ref $rMach) {
+		warn "Error getting machine information for: ".
+		    $Rec->{'rdata'} unless ($options{'quiet'});
+		next;
+	    }
+
+	    my %Resource = ('name' => $Label,
+			    'ttl' => $Rec->{'ttl'},
+			    'type' => 'ANAME',
+			    'rname' => $Rec->{'rdata'},
+			    'owner_type' => 'machine',
+			    'owner_tid' => $rMach->{'machine.id'},
+			);
+	    netreg_add_dns_resource($dbh, \%Resource);
+	}
+    }
+}
+
+sub netreg_list_all_dns_resources {
+    my ($dbh) = @_;
+
+    my $ref = CMU::Netdb::list_dns_resources($dbh, $options{'netreguser'}, '');
+    unless (ref $ref) {
+	generror($dbh, $ref, [], 'list_dns_resources');
+	return '';
+    }
+
+    my %Resources;
+    my %pos = %{CMU::Netdb::makemap($ref->[0])};
+    shift(@$ref);
+
+    foreach my $row (@$ref) {
+	my ($type, $name, $rdata) = ($row->[$pos{'dns_resource.type'}],
+				     uc($row->[$pos{'dns_resource.name'}]),
+				     uc($row->[$pos{'dns_resource.rdata'}]));
+	
+	$Resources{$type}->{$name}->{$rdata} = 
+	{'ttl' => $row->[$pos{'dns_resource.ttl'}]};
+    }
+    return \%Resources;;
+}
+
+sub netreg_add_dns_resource {
+    my ($dbh, $rResource) = @_;
+
+    $rResource->{'name'} =~ s/\.$//;
+    $rResource->{'rname'} =~ s/\.$//;
+
+    my ($res, $ref) = CMU::Netdb::add_dns_resource($dbh, 
+						   $options{'netreguser'},
+						   $rResource);
+
+    generror($dbh, $res, $ref, 'add_dns_resource') if ($res != 1);
+}
+
+sub netreg_add_building {
+    my ($dbh, $rBuilding) = @_;
+
+    my ($res, $ref) = CMU::Netdb::add_building($dbh, $options{'netreguser'},
+					       $rBuilding);
+    generror($dbh, $res, $ref, 'add_building') if ($res != 1);
+}
+
+sub netreg_add_user {
+    my ($dbh, $rUser) = @_;
+
+    CMU::Netdb::xaction_begin($dbh) unless ($options{'atomic'});
+
+    my ($res, $ref) = CMU::Netdb::add_user($dbh, $options{'netreguser'},
+					   {'flags' => '',
+					    'comment' => ''});
+    if ($res != 1) {
+	generror($dbh, $res, $ref, 'add_user');
+	CMU::Netdb::xaction_rollback($dbh) unless ($options{'atomic'});
+	return;
+    }
+
+    $rUser->{'user'} = $ref->{'insertID'};
+
+    ($res, $ref) = CMU::Netdb::add_credentials($dbh, $options{'netreguser'},
+					       $rUser);
+    if ($res != 1) {
+	generror($dbh, $res, $ref, 'add_credentials');
+	CMU::Netdb::xaction_rollback($dbh) unless ($options{'atomic'});
+	return;
+    }
+    CMU::Netdb::xaction_commit($dbh) unless ($options{'atomic'});
+}
+
+sub netreg_add_group {
+    my ($dbh, $rGroup) = @_;
+
+    my ($res, $ref) = CMU::Netdb::add_group($dbh, $options{'netreguser'},
+					    $rGroup);
+
+    generror($dbh, $res, $ref, 'add_group') if ($res != 1);
+}
+
+sub netreg_get_machine_by_hostname {
+    my ($dbh, $host) = @_;
+
+    my $ref = CMU::Netdb::list_machines($dbh, $options{'netreguser'},
+					"machine.host_name = '$host'");
+    unless (ref $ref) {
+	die "list_machines error: $ref";
+    }
+
+    return '' unless (scalar(@$ref) == 2);
+
+    my %pos = %{CMU::Netdb::makemap($ref->[0])};
+
+    my %Info = map { ($_, $ref->[1]->[$pos{$_}]) } keys %pos;
+    return \%Info;
+}
+
+sub netreg_list_all_machines {
+    my ($dbh) = @_;
+
+    my $ref = CMU::Netdb::list_machines($dbh, $options{'netreguser'}, '');
+    unless (ref $ref) {
+	die "list_machines error: $ref";
+    }
+
+    my %Machines;
+    my %pos = %{CMU::Netdb::makemap($ref->[0])};
+    shift(@$ref);
+    
+    foreach my $row (@$ref) {
+	my %info = map { ($_, $row->[$pos{$_}]) } keys %pos;
+	$Machines{uc($row->[$pos{'machine.host_name'}])} = \%info;
+    }
+
+    return \%Machines;
+}
+
+sub netreg_add_machine {
+    my ($dbh, $rMachine) = @_;
+
+    my %Perms = ($options{'user'} => ['READ,WRITE', 1]);
+
+    $rMachine->{'host_name'} =~ s/\.$//;
+    $rMachine->{'dept'} = $options{'dept'};
+
+    my ($res, $ref) = CMU::Netdb::add_machine($dbh, $options{'netreguser'},
+					      9, $rMachine, \%Perms);
+
+    generror($dbh, $res, $ref, 'add_machine') if ($res != 1);
+}
+
+# 
+sub netreg_update_machine {
+    my ($dbh, $rMachine) = @_;
+
+    my $ID = $rMachine->{'machine.id'};
+    my $Version = $rMachine->{'machine.version'};
+
+
+#    delete $rMachine->{'machine.host_name_ttl'};
+#    delete $rMachine->{'machine.expires'};
+#    delete $rMachine->{'machine.id'};
+#    delete $rMachine->{'machine.version'};
+#    delete $rMachine->{'machine.host_name_zone'};
+#    delete $rMachine->{'machine.ip_address_zone'};
+ 
+    my %Fields = map { my $dtable = $_; $dtable =~ s/^machine\.//;
+		       ($dtable, $rMachine->{$_}); } keys %$rMachine;
+
+    my ($res, $ref) = CMU::Netdb::modify_machine
+	($dbh, $options{'netreguser'},
+	 $ID, $Version, 9, \%Fields);
+
+    generror($dbh, $res, $ref, 'modify_machine');
+}
+
+# Verify/create a tree of zones to this point
+sub netreg_zone_tree {
+    my ($dbh, $name) = @_;
+
+    return if ($name eq '');
+
+    # See if $name exists
+    my $rZone = netreg_get_zone($dbh, $name);
+
+    # The zone exists
+    return if (ref $rZone);
+
+    print "netreg_zone_tree: adding zone $name\n" if ($options{'debug'});
+
+    # The zone doesn't exist, so we need to add it. But first we
+    # need to verify our child exists
+    my ($x, $rest) = split(/\./, $name, 2);
+    netreg_zone_tree($dbh, $rest);
+
+    my $Type = ($name =~ /in-addr.arpa/i ? 'rv-permissible' : 'fw-permissible');
+
+    # If this is a TLD, it's "special"
+    unless ($name =~ /\./) {
+	my $SQL = "INSERT INTO dns_zone (name, type, parent) VALUES ".
+	    "('$name', '$Type', 0)";
+	$dbh->do($SQL);
+	my $IID = $dbh->{'mysql_insertid'};
+	$SQL = "INSERT INTO protections (identity, tname, tid, rights, ".
+	    "rlevel) VALUES (-1, 'dns_zone', $IID, 'ADD', 9)";
+	$dbh->do($SQL);
+	return;
+    }
+
+    # Normal zone addition
+    my %Zone = ('name' => $name,
+		'type' => $Type
+		);
+
+    netreg_add_zone($dbh, \%Zone);
+}
+
+# Get a dns zone by name
+sub netreg_get_zone {
+    my ($dbh, $name, $inner) = @_;
+
+    $name =~ s/\.$//;
+
+    my $ref = CMU::Netdb::list_dns_zones($dbh, $options{'netreguser'},
+					 "dns_zone.name = '$name'");
+    unless (ref $ref) {
+	die "list_dns_zones ($name) error: $ref";
+    }
+
+    if (scalar(@$ref) > 2) {
+	warn "list_dns_zones ($name) returned more than 1 zone"
+	    unless ($options{'quiet'});
+    }elsif(scalar(@$ref) == 2) {
+	my %pos = %{CMU::Netdb::makemap($ref->[0])};
+	my %Info = map { ($_, $ref->[1]->[$pos{$_}]) } keys %pos;
+
+	return \%Info;
+    }
+
+    # If we've already tried the trick below, just exit
+    return '' if ($inner == 1);
+
+    # No results. See if the zone exists but protections don't
+
+
+    my $sql = "SELECT id FROM dns_zone WHERE name = '$name'";
+    my $sth = $dbh->prepare($sql);
+    $sth->execute();
+    my $res = $sth->fetchall_arrayref();
+
+    if (scalar(@$res) >= 1) {
+	# Add the proper protections
+	my ($gres, $gref) = CMU::Netdb::add_group_to_protections
+	    ($dbh, $options{'netreguser'}, 'netreg:admins', 'dns_zone',
+	     $res->[0]->[0], 'ADD', '9', '');
+
+	# Now try again
+	return netreg_get_zone($dbh, $name, 1) if ($gres == 1);
+    }
+    return '';
+}
+
+sub netreg_add_permissible_zone {
+    my ($dbh, $Z) = @_;
+
+    my %Zone = ('name' => $Z,
+		'type' => ($Z =~ /in-addr.arpa/i ? 'rv-permissible' : 
+			   'fw-permissible'),
+		);
+    
+    my ($x, $rest) = split(/\./, $Zone{'name'}, 2);
+    # Add the whole tree of zones necessary to get to this label.
+    netreg_zone_tree($dbh, $rest);
+
+    return netreg_add_zone($dbh, \%Zone);
+}
+
+sub netreg_add_zone {
+    my ($dbh, $rZone) = @_;
+
+    # Strip the trailing dot.
+    $rZone->{'name'} =~ s/\.$//;
+
+    my ($x, $rest) = split(/\./, $rZone->{'name'}, 2);
+    # Add the whole tree of zones necessary to get to this label.
+    netreg_zone_tree($dbh, $rest);
+
+    print "Adding new zone: $rZone->{'name'} ".
+	"(type: $rZone->{'type'})\n" if ($options{'debug'});
+
+    my ($res, $ref) = CMU::Netdb::add_dns_zone($dbh, $options{'netreguser'},
+					       $rZone);
+    generror($dbh, $res, $ref, 'add_dns_zone') if ($res != 1);
+}
+
+# Update the specific zone ($id/$version) with the specified fields
+sub netreg_modify_zone {
+    my ($dbh, $id, $version, $rFields) = @_;
+
+    my ($res, $ref) = CMU::Netdb::modify_dns_zone($dbh, $options{'netreguser'},
+						  $id, $version, $rFields);
+
+    generror($dbh, $res, $ref, 'modify_dns_zone') if ($res != 1);
+}
+
+sub netreg_add_subnet {
+    my ($dbh, $rSubnet) = @_;
+
+    my ($res, $ref) = CMU::Netdb::add_subnet($dbh, $options{'netreguser'},
+					     $rSubnet);
+    if ($res != 1) {
+	generror($dbh, $res, $ref, 'add_subnet');
+	return;
+    }
+
+    return if (defined $options{'reqstaticmac'} && $options{'reqstaticmac'});
+
+
+    # Add a capability for static regs without MACs for the netreguser
+    ($res, $ref) = CMU::Netdb::add_subnet_registration_mode
+	($dbh, $options{'netreguser'}, {'subnet' => $ref->{'insertID'},
+					'mode' => 'static',
+					'mac_address' => 'none',
+				    }, 'admin_default_add');
+
+    generror($dbh, $res, $ref, 'subnet_registration_mode') if ($res != 1);
+}
+
+sub netreg_get_subnets {
+    my ($dbh) = @_;
+
+    my $ref = CMU::Netdb::list_subnets($dbh, $options{'netreguser'}, '');
+
+    my %Subnets;
+    my %pos = %{CMU::Netdb::makemap($ref->[0])};
+    shift(@$ref);
+    
+    foreach my $row (@$ref) {
+	my %info = map { ($_, $row->[$pos{$_}]) } keys %pos;
+	$Subnets{$row->[$pos{'subnet.name'}]} = \%info;
+    }
+
+    return \%Subnets;
+}
+
+# Given an IP, find the subnet it belongs to
+sub netreg_get_subnet_by_ip {
+    my ($dbh, $IP) = @_;
+
+    my $ref = CMU::Netdb::list_subnets
+	($dbh, $options{'netreguser'},
+	 "(INET_ATON('$IP') & subnet.network_mask) = subnet.base_address");
+    unless (ref $ref) {
+	die "list_subnets ($IP) error: $ref";
+    }
+    return '' if (scalar(@$ref) == 1);
+    if (scalar(@$ref) > 2) {
+	warn "list_subnets ($IP) returned more than 1 subnet"
+	    unless ($options{'quiet'});
+    }
+
+    my %pos = %{CMU::Netdb::makemap($ref->[0])};
+    my %Info = map { ($_, $ref->[1]->[$pos{$_}]) } keys %pos;
+
+    return \%Info;
+}
+
+sub usage {
+    print q{
+netregimport [mode] [options]
+
+   Modes (all mutually exclusive):
+   --deptadd      Mechanism for bulk adding of departments
+                  Each line of STDIN is processed as:
+		  dept:[deptname] "[Department Description]"
+
+   --useradd      Mechanism for bulk adding of users/credentials
+                  Each line of STDIN is processed as:
+		  [credential] "[Real Name]"
+
+   --buildingadd  Mechanism for bulk adding of buildings
+                  Each line of STDIN is processed as:
+		  [Building ID] [Building Abbreviation] "[Building Name]"
+
+   --subnetadd    Mechanism for bulk adding of subnets
+                  Each line of STDIN is processed as:
+                  [Abbrev] "[Name]" [Base Addr] [Mask] [Delegated]
+
+   --dnsimport    Mechanism for adding machine registrations based upon
+                  DNS zone information. See dnsimport options below. Each line
+		  of STDIN is processed as:
+		  [Zone Name] [Import Method]
+
+   Options (global):
+   --atomic                Wrap execution in a transaction; rollback (and exit)
+                           on any error
+   --debug                 Report additional debugging information
+   --netreguser [user]     The user performing the NetReg operations. Defaults
+                           to 'netreg'; you probably don't need to change this.
+   --quiet                 Perform operations silently
+
+   Options (--dnsimport):   
+   --dept dept:[deptname]  Use the specified department for machine regs
+   --user [user]           Use the specified user for machine registrations
+
+   Options (--subnetadd):
+   --reqstaticmac          By default, subnets are added with the ability to 
+                           register machines without MAC addresses. This is
+                           necessary to enable the DNS import. Use this option
+                           to require MAC addresses with statics. This can
+                           be changed later in the web interface. 
+
+
+};
+    exit 1;
+}
+
+# Perform error reporting from CMU::Netdb calls. 
+sub generror {
+    my ($dbh, $res, $ref, $call) = @_;
+
+    my $Fields = join(',', @$ref) if (ref $ref eq 'ARRAY');
+    warn "Error executing $call: $res [$Fields]"
+	unless ($options{'quiet'});
+
+    if ($options{'atomic'}) {
+	CMU::Netdb::xaction_rollback($dbh);
+	  die "Error caused transaction abort.";
+	  exit(2);
+      }
+}
+
+sub db_connect {
+  my $TestDB = get_multi_conf_var('netdb', 'DB-MAINT');
+  die "Could not load maint information" unless (ref $TestDB);
+
+  die "Could not find connect string information"
+    unless (defined $TestDB->{'connect_string'});
+
+  my $Pass;
+
+  if (defined $TestDB->{'password_file'}) {
+    open(FILE, $TestDB->{'password_file'})
+      || die("Cannot open DB password file (".
+	     $TestDB->{'password_file'}.")");
+    $Pass = <FILE>;
+    chomp($Pass);
+    close(FILE);
+  }else{
+    $Pass = $TestDB->{'password'};
+  }
+
+  return {'connect' => $TestDB->{'connect_string'},
+          'user' => $TestDB->{'username'},
+          'pass' => $Pass,
+      };
+}
