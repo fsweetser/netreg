@@ -1,7 +1,7 @@
 #!/usr/bin/perl
-#
-# Generate DNS Configuration Files for BIND 4,8,9 servers
-# 
+
+# vi: set sw=2 ts=2:
+
 # Copyright (c) 2000-2002 Carnegie Mellon University. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -35,16 +35,18 @@
 # LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
 # OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 # PERFORMANCE OF THIS SOFTWARE.
-#
-# $Id: dns-config.pl,v 1.42 2008/03/27 19:42:41 vitroth Exp $
 
+# dns bind named.conf generator
+# major rewrite 2010-01-21 by Gabriel Somlo
+# based on orignal code by Kevin Miller (with minor patches by Dave Nolan)
 
 use strict;
 use Fcntl ':flock';
 
 BEGIN {
-  my @LPath = split(/\//, __FILE__);
-  push(@INC, join('/', @LPath[0..$#LPath-1]));
+	my @LPath = split(/\//, __FILE__);
+	push(@INC, join('/', @LPath[0..$#LPath-1]));
+	push(@INC, '/home/netreg/bin');
 }
 
 use vars_l;
@@ -59,466 +61,498 @@ my $debug = 0;
 
 my ($SERVICES, $CONFDIR, $vres);
 
-($vres, $SERVICES) = CMU::Netdb::config::get_multi_conf_var
-  ('netdb', 'SERVICE_COPY');
-($vres, $CONFDIR) = CMU::Netdb::config::get_multi_conf_var
-  ('netdb', 'DNS_CONFPATH');
+($vres, $SERVICES) =
+	CMU::Netdb::config::get_multi_conf_var('netdb', 'SERVICE_COPY');
+($vres, $CONFDIR) =
+	CMU::Netdb::config::get_multi_conf_var('netdb', 'DNS_CONFPATH');
 
 if ($ARGV[0] eq '-debug') {
-  print "** Debug Mode Enabled**\n";
-  $debug = 1;
-  $SERVICES = '/tmp/services.sif';
-  $CONFDIR = '/tmp/zones';
+	print "** Debug Mode Enabled**\n";
+	$debug = 1;
+	$SERVICES = '/tmp/services.sif';
+	$CONFDIR = '/tmp/zones';
 }
 
 # Before we begin, delete all named.conf's from the confdir
 unlink <$CONFDIR/named.conf*>;
 unlink <$CONFDIR/dhcpd.conf.nsaux>;
 
-## The completely new DNS Config Generation
-
-my %KeyLoaded;
-## Config will be:
-## Associative array of Server Hostname (all lower-case) to:
-##  - associative array of view name to view contents
-##    _default_ will be the "global" view (ie, not in a view() statement)
-##   View Contents is simply the contents of the view block
+# buffer warning messages to be emailed when script completes
+my $WarningBuffer = '';
 
 ## Load the config from the services file
-my ($rServerGroup, $rServerView, $rServerAuth, $rMachines, $rZones) = 
-  load_services($SERVICES);
+my ($rDNSSrvGrp, $rDNSSvrView, $rDNSZoneAuth, $rMachines, $rZones) =
+	load_services($SERVICES);
 
-if ($debug) {
-  print Dumper($rServerGroup);
-  print Dumper($rServerView);
-  print Dumper($rServerAuth);
-}
+# insure ddns/dhcp configs are created for only one master server for each zone
+my %KeyLoaded;
 
-write_config($rServerGroup, $rServerView, $rServerAuth, $rMachines, $rZones);
+print Data::Dumper->Dump([$rDNSSrvGrp], ['$rDNSSrvGrp']) if ($debug);
+print Data::Dumper->Dump([$rDNSSvrView], ['$rDNSSvrView']) if ($debug);
+print Data::Dumper->Dump([$rDNSZoneAuth], ['$rDNSZoneAuth']) if ($debug);
+print Data::Dumper->Dump([$rMachines], ['$rMachines']) if ($debug);
+print Data::Dumper->Dump([$rZones], ['$rZones']) if ($debug);
 
-sub write_config {
-  my ($rServerGroup, $rServerView, $rServerAuth, $rMachines, $rZones) = @_;
+write_config($rDNSSrvGrp, $rDNSSvrView, $rDNSZoneAuth, $rMachines, $rZones);
 
-  ## We need to get a list of all the nameservers that we're
-  ## generating configurations for
-  
-  my $ExtraDHCP;
-  my %Servers;
-  
-  map {
-    my $SG = $_;
-    map { 
-      push(@{$Servers{$_}}, $SG)
-	if ($rServerGroup->{$SG}->{'machines'}->{$_}->{'type'} ne 'none');
-    } keys %{$rServerGroup->{$SG}->{'machines'}};
-  } keys %$rServerGroup;
-  
-  foreach my $HN (keys %Servers) {
-    print "\n\nGenerating config for $HN:\n" if ($debug);
-    
-    # General plan for writing: find any _default_ options matching
-    # the output format (bind4/bind8/bind9) 
-    # 2) Look for view definitions (only bind9)
-    # 3) Write zone definitions (with keys)
-    
-    my %ActiveViews;
-    my ($ServerType, $ServerVersion) = ('', '');
-
-    foreach my $SG (@{$Servers{$HN}}) {
-      die_msg("ServerType of $HN mismatch (noticed on Server Group $SG)") 
-	if ($ServerVersion ne '' 
-	    && $rServerGroup->{$SG}->{'machines'}->{$HN}->{'version'} ne '' 
-	    && $ServerVersion ne $rServerGroup->{$SG}->{'machines'}->{$HN}->{'version'});
-      $ServerType = $rServerGroup->{$SG}->{'machines'}->{$HN}->{'type'};
-      $ServerVersion = $rServerGroup->{$SG}->{'machines'}->{$HN}->{'version'} if ($rServerGroup->{$SG}->{'machines'}->{$HN}->{'version'});
-      
-      print "Server $HN in $SG is $rServerGroup->{$SG}->{'machines'}->{$HN}->{'type'}/$rServerGroup->{$SG}->{'machines'}->{$HN}->{'version'}\n" if ($debug);
-      foreach my $View (keys %{$rServerGroup->{$SG}->{'views'}}) {
-	if ($rServerGroup->{$SG}->{'machines'}->{$HN}->{'version'} eq $rServerView->{$View}->{'version'}) {
-	  print "Adding service group $SG as active on view $View\n" if ($debug);
-	  push(@{$ActiveViews{$View}}, $SG);
-	}
-      }
-    }
-
-    if ($ServerVersion eq '') {
-      print "Skipping config generation for $HN, because the server version is not set.";
-      next;
-    }
-    open(FILE, ">$CONFDIR/named.conf.$HN") ||
-      die_msg("Cannot open $CONFDIR/named.conf.$HN for writing");
-
-    ## ActiveViews now contains all views that this server will need to
-    ## support (hash ref to the ServerGroups that use this view + server)
-
-    my %RawOptions;    
-    ## Go for _default_
-    {
-      my %DefOptions;
-      my $nDO = 0;
-      foreach my $SG (@{$Servers{$HN}}) {
-	foreach my $AV (keys %ActiveViews) {
-	  if ($rServerGroup->{$SG}->{'views'}->{$AV}->{'name'} 
-	      eq '_default_') {
-	    map { 
-	      $DefOptions{$_} = 1;
-	      } @{$rServerView->{$AV}->{'params'}};
-            map {
-              $RawOptions{$_} = 1;
-            } @{$rServerView->{$AV}->{'raw_param'}};
-
-	    $nDO++;
-	  }
-	}
-      }
-    
-      if ($nDO != 0) {
-	print FILE "options {\n";
-	print FILE join("\n", map { "\t".$_.";" } 
-			keys %DefOptions);
-	print FILE "\n};\n\n";
-      }
-    }
-
-    ## Print some boilerplate stuff for various servertypes
-    if ($ServerVersion eq 'bind9') {
-      print FILE "
-include \"/etc/rndc.key\";
-
-controls {
-\tinet 127.0.0.1 allow { 127.0.0.1; } keys { rndckey; };
-};\n
-
-logging {
-  channel \"xfer\" {
-    file \"/usr/domain/var/xfer.log\" versions 4 size 250m;
-    print-time yes;
-    print-severity yes;
-    print-category yes;
-  };
-  channel \"update\" {
-    file \"/usr/domain/var/update.log\" versions 4 size 250m;
-    print-time yes;
-    print-severity yes;
-  };
-  channel \"queries\" {
-    file \"/usr/domain/var/query.log\" versions 4 size 250m;
-    print-time yes;
-    print-severity yes;
-  };
-  category \"security\" { \"default_syslog\"; };
-  category \"xfer-out\" { \"xfer\"; };
-  category \"xfer-in\" { \"xfer\"; };
-  category \"update\" { \"update\"; };
-  category \"update-security\" { \"update\"; };
-  category \"queries\" { \"queries\"; };
-};
-
-";
-    }elsif($ServerVersion eq 'bind8') {
-      print FILE "zone \".\" {
-\ttype hint;
-\tfile \"named.hints\";
-};\n\n";
-    }
-
-    ## Construct the server blocks
-    {
-      my %ServerBlock;
-      foreach my $SG (@{$Servers{$HN}}) {
-	foreach my $lhn (keys %{$rServerGroup->{$SG}->{'server_blocks'}}) {
-	  push(@{$ServerBlock{$lhn}}, 
-	       @{$rServerGroup->{$SG}->{'server_blocks'}->{$lhn}});
-	}
-      }
-
-      foreach my $lhn (sort {$a cmp $b} keys %ServerBlock) {
-	my $lip = CMU::Netdb::long2dot($rMachines->{$lhn}->{ip_address});
-	print FILE "server $lip {\n\t".join(";\n\t", @{$ServerBlock{$lhn}});
-	print FILE ";\n};\n\n";
-      }
-    }
-    
-    my $FILE;
-    ## First figure out the full set of views, the various view options,
-    ## and the correct ordering
-    my %ViewOrder;
-    my %ViewContents;
-    my %ViewMap;
-    my $MaxOrder = -1;
-    {
-      foreach my $SG (@{$Servers{$HN}}) {
-	foreach my $AV (keys %ActiveViews) {
-	  next if ($rServerGroup->{$SG}->{'views'}->{$AV}->{'name'} eq '');
-	  my $VName = $rServerGroup->{$SG}->{'views'}->{$AV}->{'name'};
-	  my $VOrder = $rServerGroup->{$SG}->{'views'}->{$AV}->{'order'};
-	  $ViewMap{$VName} = $AV;
-	  $MaxOrder = $VOrder if ($VOrder > $MaxOrder);
-	  print "Defining view $VName ($MaxOrder/$VOrder)\n" if ($debug);
-	  if ($VName ne '_default_') {
-	    push(@{$ViewOrder{$VOrder}}, $VName);
-	    map {
-	      $ViewContents{$VName}->{$_} = 1;
-	    } @{$rServerView->{$AV}->{'params'}};
-	  }
-	}
-      }
-    }
-    
-    ## Define a default global view that includes
-    ## all zones; allows all, etc.
-    {
-      $ViewOrder{$MaxOrder+1} = ['global'];
-      $ViewContents{'global'}->{"match-clients { any; }"} = 1;
-      $ViewContents{'global'}->{"recursion yes"} = 1;
-      foreach my $k (keys %RawOptions) {
-        $ViewContents{'global'}->{$k} = 1;
-      }
-
-    }
-    
-    ## Now that we have ViewOrder and ViewContents, print all the views
-    ## while going through the server groups to find zones for this view
-
-    print Data::Dumper->Dump([\%ViewOrder], ['View order']) if ($debug);
-    foreach my $VOs (sort {$a <=> $b} keys %ViewOrder) { 
-      foreach my $View (@{$ViewOrder{$VOs}}) {
-	next if ($ServerVersion ne 'bind9' && $View ne 'global');
-	
-	my $Import = 'yes';
-	print "Looking up $View in $ViewMap{$View}\n";
-        $Import = $rServerView->{$ViewMap{$View}}->{'import'}
-	  if (defined $ViewMap{$View} && 
-	      defined $rServerView->{$ViewMap{$View}}->{'import'});
-	
-	# Print the view parameters, etc.
-	if ($ServerVersion eq 'bind9') {
-	  $FILE .= "view \"$View\" {\n";
-	  $FILE .= join("\n",  map { "\t".$_.";" } 
-			keys %{$ViewContents{$View}});
-	  $FILE .= "\n\n";
-	}
-
-	# Print the zone contents
-	foreach my $SG (@{$Servers{$HN}}) {
-	  my @Masters;
-	  my @Slaves;
-   	  $ServerType = $rServerGroup->{$SG}->{'machines'}->{$HN}->{'type'};
-	  next if ($rServerGroup->{$SG}->{'machines'}->{$HN}->{'version'} ne $ServerVersion);
-
-	  # Find the masters and slaves
-	  my ($Mach, $MInfo);
-	  foreach my $Mach (keys %{$rServerGroup->{$SG}->{'machines'}}) {
-	    my $MInfo = $rServerGroup->{$SG}->{'machines'}->{$Mach};
-	    if ($MInfo->{'type'} eq 'master') {
-	      push(@Masters, $Mach);
-	    }elsif($MInfo->{'type'} eq 'slave') {
-	      push(@Slaves, $Mach);
-	    }
-	  }
-
-	  foreach my $Zone (sort {$a cmp $b} 
-			    keys %{$rServerGroup->{$SG}->{'zones'}}) {
-	    goto ZONE_PRINT
-	      if ($ServerVersion ne 'bind9');
-
-	    if ($Import ne 'yes') {
-	      next 
-		if (!defined 
-		    $rServerGroup->{$SG}->{'zones'}->{$Zone}->{'views'} ||
-		    $#{$rServerGroup->{$SG}->{'zones'}->{$Zone}->{'views'}}
-                    == -1);
-	    }
-	    
-	    goto ZONE_PRINT 
-	      if (!defined
-		  $rServerGroup->{$SG}->{'zones'}->{$Zone}->{'views'});
-	    
-	    goto ZONE_PRINT
-	      if (
-		  $#{$rServerGroup->{$SG}->{'zones'}->{$Zone}->{'views'}}
-		  == -1);
-	    
-	    goto ZONE_PRINT
-	      if (grep /^$View$/, 
-		  @{$rServerGroup->{$SG}->{'zones'}->{$Zone}->{'views'}});
-	    
-	    next;
-
-	  ZONE_PRINT: 
-	    ## Figure out any keys / ACLs needed for this from DDNS_AUTH
-	    my $ExtraZone;
-	    if ($ServerType eq 'master') {
-	      my $MasterIP = CMU::Netdb::long2dot($rMachines->{$HN}->{ip_address});
-
-	      my $ExtraZoneAuth = find_zone_auth($Zone, $rServerAuth, $rMachines);
-	      my ($ExtraDNS, $DHCPbits);
-	      ($ExtraDNS, $ExtraZone, $DHCPbits) = 
-		generate_ddns_keyacl($Zone, $View, $MasterIP, 
-				     $rZones->{$Zone}->{'ddns_auth'},
-				     $ExtraZoneAuth);
-	      $ExtraDHCP .= $DHCPbits;
-	      
-	      # This needs to go directly into the file, because we want it
-	      # to come before the views are actually printed.
-	      print FILE join("\n", map {
-		"$_";
-	      } split(/\n/, $ExtraDNS))."\n\n" if ($ExtraDNS ne '');
-	    }
-	    
-	    ## Print the actual zone
-	    $FILE .= "\tzone \"$Zone\" {\n".
-	      "\t\ttype $ServerType;\n";
-	    
-	    if ($ServerType ne 'forward') {
-	      $FILE .= "\t\tfile \"$Zone.zone\";\n";
-	    }
-	    
-	    if ($ServerType eq 'slave' || $ServerType eq 'stub') {
-	      $FILE .= "\t\tmasters {".
-		join(';', map {
-		  CMU::Netdb::long2dot($rMachines->{$_}->{ip_address});
-		} @Masters).";};\n";
-	    }elsif($ServerType eq 'forward') {
-	      my $FT = 'master';
-	      $FT = $rServerGroup->{$SG}->{'forward_to'}
-		if (defined $rServerGroup->{$SG}->{'forward_to'} ne '');
-
-	      if ($FT eq 'master') {
-		$FILE .= "\t\tforwarders {".
-		  join(';', map {
-		    CMU::Netdb::long2dot($rMachines->{$_}->{ip_address});
-		  } @Masters).";};\n";
-	      }elsif($FT eq 'slave') {
-		$FILE .= "\t\tforwarders {".
-		  join(';', map {
-		    CMU::Netdb::long2dot($rMachines->{$_}->{ip_address});
-		  } @Slaves).";};\n";
-	      }elsif($FT eq 'both') {
-		$FILE .= "\t\tforwarders {".
-		  join(';', map {
-		    CMU::Netdb::long2dot($rMachines->{$_}->{ip_address});
-		  } @Masters, @Slaves).";};\n";
-	      }
-	    }
-
-	    # Print the zone parameters
-	    map {
-	      $FILE .= "\t\t$_;\n";
-	    } @{$rServerGroup->{$SG}->{'zones'}->{$Zone}->{'params'}};
-	    
-	    $FILE .= join("\n", map {
-	      "\t\t$_"
-	    } split(/\n/, $ExtraZone))."\n" if ($ExtraZone ne '');
-
-	    $FILE .= "\t};\n\n";
-	  }
-	}
-
-	$FILE .= "\n};\n\n" if ($ServerVersion eq 'bind9');
-      }
-    }
-	
-    print FILE $FILE;
-
-    close(FILE);
-  }  
-  ## Write the DHCP bits
-  open(FILE, ">$CONFDIR/dhcpd.conf.nsaux") ||
-    die_msg("Cannot open $CONFDIR/dhcpd.conf.nsaux for writing");
-  print FILE $ExtraDHCP;
-  close(FILE);
+if ($WarningBuffer ne '') {
+	&CMU::Netdb::netdb_mail('dns-config.pl', $WarningBuffer,	
+													'Warnings from dns-config.pl !');
 }
 
 exit(0);
-## ***************************************************************************************
-  
+## ****************************************************************************
+
+sub write_config {
+	my ($rDNSSrvGrp, $rDNSSvrView, $rDNSZoneAuth, $rMachines, $rZones) = @_;
+	# rDNSSrvGrp is the list of service groups of type "DNS Server Group"
+	# rDNSSvrView is the list of service groups of type "DNS View Definition"
+	# rDNSZoneAuth is the list of service groups of type "DDNS_Zone_Auth"
+	#		- machine members can to dynamically update zone members' master server
+	#	  (global hash %KeyLoaded enforces limit of one ddns master per zone)
+	# rMachines -- any machines that are members of any service groups
+	#		- only used to resolve hostname -> ip addresses !
+	# rZones -- any zones that are members of any service groups
+	#		- only used for ddns_auth field, passed along to generate_ddns_keyacl()
+
+	my $DHCP_DDNS;	# dynamic DNS config bits for the dhcp server(s)
+
+	# build hash keyed by hosts for which we plan to generate a named.conf file
+	# values are the list of server groups in which the host has a valid
+	#  "Server Type" attribute (master, slave, forward, or stub) and
+	#  a defined "Server Version".
+	my %HGroups;
+	foreach my $SG (keys %$rDNSSrvGrp) {
+		foreach my $HN (keys %{$rDNSSrvGrp->{$SG}{'machines'}}) {
+			if (defined $rDNSSrvGrp->{$SG}{'machines'}{$HN}{'version'} &&
+					$rDNSSrvGrp->{$SG}{'machines'}{$HN}{'version'} ne '' &&
+					defined $rDNSSrvGrp->{$SG}{'machines'}{$HN}{'type'} &&
+					$rDNSSrvGrp->{$SG}{'machines'}{$HN}{'type'} ne 'none') {
+
+				push(@{$HGroups{$HN}}, $SG);
+			}
+		}
+	}
+
+	print Data::Dumper->Dump([\%HGroups], ['\%HGroups']) if ($debug);
+
+	# now generate a named.conf for each of the hosts:
+	HOST_GEN_CONF:
+	foreach my $HN (keys %HGroups) {
+
+		print "\n\nWorking on $HN\n" if ($debug);
+
+		my $ServerVersion = '';
+		my $MaxOrder = 0;
+		my %ViewOrder;
+		my %GlobalOptions;	# global options from params of '_default_'/'global'
+		my %ViewOptions;	# per-view options (non-default views only)
+		my %ViewAddedBy;	# viewgroup/servergroup that created $VName
+		my %SpecZonesOnly;	# true if 'Import Unspecified Zones' was explicitly
+												#  set to 'no' on the view group which supplied $VName
+
+		# iterate over all service groups containing $HN,
+		#  verify server version consistency and
+		#  collect any applicable views
+		foreach my $SG (@{$HGroups{$HN}}) {
+
+			# set $ServerVersion for $HN for the first time (if not already set)
+			if ($ServerVersion eq '') {
+				$ServerVersion = $rDNSSrvGrp->{$SG}{'machines'}{$HN}{'version'};
+			}
+			# complain loudly and skip $HN altogether if
+			#  mismatched server versions across groups:
+			if ($ServerVersion ne $rDNSSrvGrp->{$SG}{'machines'}{$HN}{'version'}) {
+				warn_msg("Mismatched 'Server Version' for $HN in group $SG: ".
+									"got $rDNSSrvGrp->{$SG}{'machines'}{$HN}{'version'}, ".
+									"expected $ServerVersion; Skipping conf. gen. for $HN");
+				next HOST_GEN_CONF;
+			}
+
+			print "Server $HN in $SG is $rDNSSrvGrp->{$SG}{'machines'}{$HN}{'type'}/".
+						"$rDNSSrvGrp->{$SG}{'machines'}{$HN}{'version'}\n" if ($debug);
+
+			# iterate over view groups in current $SG,
+			#  and select the ones to be used for $HN's named.conf
+			foreach my $VG (keys %{$rDNSSrvGrp->{$SG}{'views'}}) {
+
+				# host and view versions must match;
+				# view must have a 'name' attribute set in $SG
+				next if ($rDNSSvrView->{$VG}{'version'} ne $ServerVersion ||
+									$rDNSSrvGrp->{$SG}{'views'}{$VG}{'name'} eq '');
+
+				my $VName = $rDNSSrvGrp->{$SG}{'views'}{$VG}{'name'};
+				my $VOrder = $rDNSSrvGrp->{$SG}{'views'}{$VG}{'order'};	# undef == 0
+
+				print "Adding view $VG named $VName ".
+							"in group $SG, order $VOrder/$MaxOrder\n" if ($debug);
+
+				if ($VName eq '_default_' || $VName eq 'global') {
+
+					# '_default_' and 'global' are equivalent, and multiple view groups
+					#  with those names may cumulatively contribute parameters to the
+					#  global options sections of $HN's named.conf
+					# also, ignore $VOrder, as 'global' must be last in named.conf
+					map { $GlobalOptions{$_} = 1; } @{$rDNSSvrView->{$VG}{'params'}};
+
+				} else {
+
+					# only one non-default $VG may supply $VName per $HN (across all $SGs)
+					if (defined $ViewAddedBy{$VName}) {
+						warn_msg("View $VName already provided by view/service group ".
+											"$ViewAddedBy{$VName}; Skipping $VG/$SG on host $HN");
+						next;
+					}
+					$ViewAddedBy{$VName} = "$VG/$SG";
+					# 'Import Unspecified Zones' explicitly disallowed on this view ?
+					$SpecZonesOnly{$VName} = 1 if ($rDNSSvrView->{$VG}{'import'} eq 'no');
+					# and use $VOrder to determine relative position $VName in named.conf
+					$ViewOrder{$VName} = $VOrder;
+					$MaxOrder = $VOrder if ($VOrder > $MaxOrder);
+					# collect view attributes from view group
+					map {
+						$ViewOptions{$VName}->{$_} = 1;
+					} @{$rDNSSvrView->{$VG}{'params'}};
+
+				} # if ($VName eq '_default_' || 'global')
+
+			} # foreach $VG (keys %{$rDNSSrvGrp->{$SG}{'views'}})
+
+		} # foreach $SG (@{$HGroups{$HN}})
+
+		# 'global' view goes last, using only global options and no restrictions;
+		# undefined 'Import Unspecified Zones' will default to yes
+		$ViewOrder{'global'} = $MaxOrder + 1;
+
+		# server version set, consistent across groups, but not bind9
+		if ($ServerVersion ne 'bind9') {
+			warn_msg("Skipping config generation for $HN ".
+								"(server version $ServerVersion != bind9)");
+			next;
+		}
+
+		print "Generating config for $HN:\n" if ($debug);
+
+		open(FILE, ">$CONFDIR/named.conf.$HN") ||
+			die_msg("Cannot open $CONFDIR/named.conf.$HN for writing");
+
+		# print out global named.conf options section:
+		if (keys %GlobalOptions > 0) {
+			print FILE "options {\n".
+									join("\n", map { "\t$_;" } keys %GlobalOptions).
+									"\n};\n\n";
+		}
+
+		## include local, host-specific configuration
+		print FILE "include \"/usr/domain/etc/base.conf\";\n\n";
+
+		print Data::Dumper->Dump([\%ViewOrder], ['$%ViewOrder']) if ($debug);
+		print Data::Dumper->Dump([\%ViewAddedBy], ['$%ViewAddedBy']) if ($debug);
+
+		# during the course of processing zones, we might generate keys and acls for
+		# the zone master's config file, which need to get in before any views;
+		# we buffer all zone/view related config bits, to be printed after any such
+		# keys and ACLs have made it into named.conf
+		my $BUFFER;
+
+		# generate views in the appropriate order
+		foreach my $VName
+								(sort {$ViewOrder{$a} <=> $ViewOrder{$b}} keys %ViewOrder) {
+
+			print "View $VName provided by $ViewAddedBy{$VName}\n" if ($debug);
+
+			# opening 'view' block statement, and view-specific options:
+			$BUFFER .= "view \"$VName\" {\n".
+									join("\n",  map { "\t$_;" } keys %{$ViewOptions{$VName}}).
+									"\n\n";
+
+			# keep track of which $SG added each key zone to the current view
+			my %ZoneAddedBy;
+
+			# process zones from all of $HN's $SGs, and add them to $VName if
+			#   $SpecZonesOnly{$VName} and the zone's 'Zone In View' attributes align
+			foreach my $SG (@{$HGroups{$HN}}) {
+
+				# $HN's ServerType attribute on its $SG membership
+				my $ServerType = $rDNSSrvGrp->{$SG}{'machines'}{$HN}{'type'};
+
+				# Find masters' and slaves' IP addresses (might include ourselves, $HN)
+				my $Masters = '';
+				my $Slaves = '';
+				while (my ($Mach, $MInfo) = each %{$rDNSSrvGrp->{$SG}{'machines'}}) {
+					if ($MInfo->{'type'} eq 'master') {
+						$Masters.=CMU::Netdb::long2dot($rMachines->{$Mach}{ip_address}).';';
+					} elsif ($MInfo->{'type'} eq 'slave') {
+						$Slaves.=CMU::Netdb::long2dot($rMachines->{$Mach}{ip_address}).';';
+					}
+				}
+
+				foreach my $Zone (sort keys %{$rDNSSrvGrp->{$SG}{'zones'}}) {
+
+					# any ZoneInView attributes on this zone's $SG membership ?
+					if (defined $rDNSSrvGrp->{$SG}{'zones'}{$Zone}{'views'}) {
+						# yes, skip unless $VName is among those attributes
+						next unless grep(/^$VName$/,
+															@{$rDNSSrvGrp->{$SG}{'zones'}{$Zone}{'views'}});
+					} else {
+						# no, unspecified zone;
+						# skip if 'Import Unspecified Zones' turned off on $VName
+						next if ($SpecZonesOnly{$VName});
+					}
+
+					# have we already added this zone to this view ?
+					# Unfortunately the current semantics of DNS Server Groups
+					# (and the netreg u/i in general) are not equipped to prevent this
+					# from happening. Allowing it through into the config file will
+					# result in something that won't load into bind, so we refuse to do
+					# it and complain loudly in hopes that someone will notice and fix
+					# the config error in NetReg.
+					if (defined $ZoneAddedBy{$Zone}) {
+						warn_msg("Attempt to add zone $Zone to view $VName via ".
+											"service group $SG on host $HN failed (already ".
+											"added from group $ZoneAddedBy{$Zone})");
+						next;
+					}
+					$ZoneAddedBy{$Zone} = $SG;
+
+					## Print the actual zone
+					$BUFFER .= "\tzone \"$Zone\" {\n\t\ttype $ServerType;\n";
+
+					if ($ServerType ne 'forward' && $ServerType ne 'stub') {
+						$BUFFER .= "\t\tfile \"$Zone.zone\";\n";
+					}
+
+					if ($ServerType eq 'master') {
+						# we're the master for $Zone (ServerType for $HN in $SG is 'master')
+						#  we need to add any keys and acls to allow dynamic updates:
+						#
+						#  NOTE1: if multiple masters are configured for a ddns zone, only
+						#  the first one we process gets the keys and gets added to dhcp
+						#  by generate_ddns_keyacl().
+						#
+						#  NOTE2: the update script on the managed DNS servers expects
+						#  master zones to have the 'type', 'file', and 'allow-update'
+						#  lines in contiguous squence in this order. I.e., if 'type' and
+						#  'file' are not immediately followed by 'allow-update', the
+						#  script assumes this is *not* a ddns-managed zone and will
+						#  potentially overwrite its zonefile.
+						print "Host $HN is master for zone $Zone ".
+									"in svcgroup $SG (current view = $VName)\n" if ($debug);
+
+						my ($GlobalDDNS, $ZoneDDNS, $ZoneDHCP) =
+							generate_ddns_keyacl($Zone,
+								CMU::Netdb::long2dot($rMachines->{$HN}{ip_address}),	# $HN's IP
+								$rZones->{$Zone}{'ddns_auth'},
+								get_authorized_updaters($Zone, $rDNSZoneAuth, $rMachines));
+
+						# This needs to go directly into the file, because we want it
+						# to come before the views are actually printed.
+						print FILE "$GlobalDDNS";
+
+						# this gets buffered along with the other zone-specific bits
+						$BUFFER .= $ZoneDDNS;
+
+						# buffer dynamic update config bits for the dhcp server(s)
+						$DHCP_DDNS .= $ZoneDHCP;
+
+					} elsif ($ServerType eq 'forward' || $ServerType eq 'stub') {
+
+						# NOTE: while stub zones are often considered more similar to
+						# slave zones (they 'slave' only the SOA record), we're using
+						# them to replace forward zones on the caching servers.
+						# While the target of a forward is expected to return a full
+						# answer (thus forcing us to have either a very detailed list
+						# of all forwarded (sub)zones on the cache, or make the authorities
+						# recurse on behalf of the caches), having a stub to the top-level
+						# zones on the cache allows it to both bypass root *and* perform
+						# recursion itself, without explicit a-priori configuration
+						# regarding delegations from the toplevel zone on the authority.
+						# Stub zones facilitate this by insuring the toplevel NS record
+						# is always in cache, allowing the DNS lookup algorithm to
+						# opportunistically start somewhere *below* the root (i.e. at the
+						# top-level server).
+
+						# we're forwarding this zone: figure out where
+						my $ForwardTo = 'master';
+						if (defined $rDNSSrvGrp->{$SG}{'forward_to'} &&
+								$rDNSSrvGrp->{$SG}{'forward_to'} ne '') {
+							$ForwardTo = $rDNSSrvGrp->{$SG}{'forward_to'};
+						}
+
+						my $keyword = ($ServerType eq 'stub') ? 'masters' : 'forwarders';
+
+						if ($ForwardTo eq 'master') {
+							$BUFFER .= "\t\t$keyword {$Masters};\n";
+						} elsif ($ForwardTo eq 'slave') {
+							$BUFFER .= "\t\t$keyword {$Slaves};\n";
+						} elsif ($ForwardTo eq 'both') {
+							$BUFFER .= "\t\t$keyword {$Masters$Slaves};\n";
+						}
+
+					} elsif ($ServerType eq 'slave') {
+
+						# we're slaving this zone, point at master(s)
+						$BUFFER .= "\t\tmasters {$Masters};\n";
+
+					} # if ($ServerType eq 'master' / 'forward' / 'slave' / 'stub')
+
+					# Print the (indented) zone parameters, if any
+					map {
+						$BUFFER .= "\t\t$_;\n";
+					} @{$rDNSSrvGrp->{$SG}{'zones'}{$Zone}{'params'}};
+
+					$BUFFER .= "\t};\n\n";
+
+				} # foreach my $Zone (sort keys %{$rDNSSrvGrp->{$SG}{'zones'}})
+
+			} # foreach my $SG (@{$HGroups{$HN}})
+
+			# closing view block statement (bind-9 only)
+			$BUFFER .= "\n};\n\n";
+
+		} # foreach my $VName (sort {...} keys %ViewOrder)
+
+		print FILE $BUFFER;
+
+		close(FILE);
+
+	} # foreach my $HN (keys %HGroups) 
+
+	## Write the DHCP bits
+	open(FILE, ">$CONFDIR/dhcpd.conf.nsaux") ||
+		die_msg("Cannot open $CONFDIR/dhcpd.conf.nsaux for writing");
+	print FILE $DHCP_DDNS;
+	close(FILE);
+}
+
+sub warn_msg {
+	my ($msg) = @_;
+	$WarningBuffer .= "$msg\n";
+	warn $msg;
+}
+
 sub die_msg {
-  &CMU::Netdb::netdb_mail('dns-config.pl', $_[0], 'dns-config died!');
-  die $_[0];
+	my ($msg) = @_;
+	&CMU::Netdb::netdb_mail('dns-config.pl', $msg, 'dns-config died!');
+	die $msg;
 }
 
-## Go through the DDNS_Zone_Auth and figure out what IPs belong on this zone
-sub find_zone_auth {
-  my ($ZoneName, $rServerAuth, $rMachines) = @_;
-  
-  my @Machines;
-  foreach my $SG (keys %$rServerAuth) {
-    next unless (grep(/^$ZoneName$/i, keys %{$rServerAuth->{$SG}->{zones}}));
-    foreach my $M (keys %{$rServerAuth->{$SG}->{machines}}) {
-      push(@Machines, CMU::Netdb::long2dot($rMachines->{$M}->{ip_address}));
-    }
-  }
-  return join(';', @Machines);
+# grab all IPs of machines tied to $ZoneName by a DDNS_Zone_Auth service group
+# these are machines allowed to ddns-update the zone's master server
+sub get_authorized_updaters {
+	my ($ZoneName, $rDNSZoneAuth, $rMachines) = @_;
+
+	my @Machines;
+	foreach my $SG (keys %$rDNSZoneAuth) {
+		next unless (grep(/^$ZoneName$/i, keys %{$rDNSZoneAuth->{$SG}{zones}}));
+		foreach my $M (keys %{$rDNSZoneAuth->{$SG}{machines}}) {
+			push(@Machines, CMU::Netdb::long2dot($rMachines->{$M}{ip_address}));
+		}
+	}
+	return join(';', @Machines);
 }
 
-## Figure out what extra bits are needed for keys/ACLs for DDNS
+# For DDNS master servers, generate:
+#  - extra per-zone config bits that go into the global file,
+#    before any views ($GlobalDDNS, containing e.g. keys and acls);
+#  - allow-update statement that goes into the current zone config
+#    within the current view ($ZoneDDNS)
+#  - if applicable 'auto-dnssec maintain' statement asking the master
+#    to use DNSSec on the zone, and automatically manage the process
+#  - corresponding configuration bits for any dhcp servers allowed to
+#    perform ddns updates on this zone ($ZoneDHCP)
+# NOTE: Global %KeyLoaded hash insures that only one one master gets
+#    configured to receive dynamic updates for each zone
+#    (thus enforcing the one-ddns-master-per-zone convention)
 sub generate_ddns_keyacl {
-  my ($Zone, $View, $Master, $DDNS_Auth, $ZoneAuth) = @_;
+	my ($Zone, $MasterIP, $DDNS_Auth, $AllowUpdateIPs) = @_;
 
-  my ($ExtraDNS, $ExtraZone, $DHCPBits) = ('', '', '');
-  my %AuthInfo;
-  my @keys;
-  
-  my @dkey = split(/\s+/, $DDNS_Auth);
-  map {
-    my ($a, $b) = split(/\:/, $_);
-    $AuthInfo{lc($a)} = $b;
-  } @dkey;
- 
-  if (defined $AuthInfo{key}) {
-    $ExtraDNS .= "key $Zone.key {\n\talgorithm hmac-md5;\n\t".
-      "secret \"$AuthInfo{key}\";\n};\n\n"
-	if (!defined $KeyLoaded{"$Zone.key"});
-    push(@keys, "key $Zone.key");
-    $KeyLoaded{"$Zone.key"} = 1;
-  }
-  
-  foreach (grep {/^key\/\S+$/} keys %AuthInfo) {
-    my $key = $AuthInfo{$_};
-    $_ =~ /^key\/(\S+)$/;
-    my $kname = $1;
-    if ($kname eq 'key') {
-      CMU::Netdb::netdb_mail('dns-config.pl', 
-			     "Zone $Zone has DDNS_Auth Key named key/key ".
-			     "-- this is not valid.\nKey is being ignored.");
-      next;
-    }
-    $ExtraDNS .= "key $Zone.$kname {\n\talgorithm hmac-md5;\n\t".
-      "secret \"$key\";\n};\n\n" if (!defined $KeyLoaded{"$Zone.$kname"});
-    push(@keys, "key $Zone.$kname");
-    if ($kname eq 'dhcp' && !defined $KeyLoaded{"$Zone.dhcp"}) {
-      $DHCPBits .= "key $Zone.dhcp {\n\t".
-	"algorithm HMAC-MD5.SIG-ALG.REG.INT;\n\t".
-	  "secret $key;\n};\n\n".
-	    "zone $Zone. {\n\tprimary $Master;\n\tkey $Zone.dhcp;".
-	      "\n}\n\n";
-    }
-    $KeyLoaded{"$Zone.$kname"} = 1;
-  }
+	# return values:
+	my ($GlobalDDNS, $ZoneDDNS, $ZoneDHCP) = ('', '', '');
 
-  if (defined $AuthInfo{ip} || $ZoneAuth ne '') {
-    $AuthInfo{ip} .= ';' if ($AuthInfo{ip} ne '');
-    $ZoneAuth .= ';' if ($ZoneAuth ne '');
+	# turn the $DDNS_Auth string ("key1:value1 key2:value2 ...")
+	#  into a hash with lowercased keys
+	my %AuthInfo;
+	map {
+		my ($k, $v) = split(/:/);
+		$AuthInfo{lc($k)} = $v;
+	} split(' ', $DDNS_Auth);
 
-    $ExtraDNS .= "acl $Zone.acl { ".$AuthInfo{ip}.$ZoneAuth." };\n"
-	if (!defined $KeyLoaded{"$Zone.acl"});
-    push(@keys, "$Zone.acl");
-    $KeyLoaded{"$Zone.acl"} = 1;
-  }
-  $ExtraZone = "allow-update {\n".
-    "\t".join(";\n\t", @keys).";\n};\n" if ($#keys != -1);
-  
-  return ($ExtraDNS, $ExtraZone, $DHCPBits);
+	my @allow_update;
+	while (my ($k, $kval) = each %AuthInfo) {
+		my ($kword, $ktype) = split(/\//, $k);
+
+		next unless ($kword eq 'key');
+
+		# "key:foo" and "key/key:foo" are hereby declared equivalent :)
+		$ktype = 'key' unless (defined $ktype);
+
+		if (defined $KeyLoaded{$Zone.$ktype}) {
+			warn_msg("$Zone.$ktype already added to $KeyLoaded{$Zone.$ktype}; ".
+								"ignoring duplicate master $MasterIP");
+		} else {
+			$KeyLoaded{$Zone.$ktype} = $MasterIP;
+
+			push(@allow_update, "key $Zone.$ktype");
+
+			$GlobalDDNS .= "key $Zone.$ktype {\n\t".
+											"algorithm hmac-md5;\n\t".
+											"secret \"$kval\";\n};\n\n";
+			if ($ktype eq 'dhcp') {
+				$ZoneDHCP .= "key $Zone.dhcp {\n\t".
+											"algorithm HMAC-MD5.SIG-ALG.REG.INT;\n\t".
+											"secret $kval;\n};\n\n".
+											"zone $Zone. {\n\t".
+											"primary $MasterIP;\n\t".
+											"key $Zone.dhcp;\n}\n\n";
+			}
+		}
+	} # while (my ($k, $kval) = each %AuthInfo)
+
+	# IPs allowed to dynamically update the zone:
+	if ($AllowUpdateIPs ne '') {
+		# obtained via DDNS_Zone_Auth service group memberships
+		$AllowUpdateIPs .= ';';	# just need to append a ';' here
+	}
+	if (defined $AuthInfo{'ip'} && $AuthInfo{'ip'} ne '') {
+		# obtained via the ddns_auth string on the zone's netreg record
+		$AllowUpdateIPs .= $AuthInfo{'ip'} . ';';	# append to AllowUpdateIPs
+	}
+
+	if ($AllowUpdateIPs ne '') {
+		if (defined $KeyLoaded{$Zone.'acl'}) {
+			warn_msg("$Zone.acl already added to $KeyLoaded{$Zone.'acl'}; ".
+								"ignoring duplicate master $MasterIP");
+		} else {
+			$KeyLoaded{$Zone.'acl'} = $MasterIP;
+
+			push(@allow_update, "$Zone.acl");
+			$GlobalDDNS .= "acl $Zone.acl { $AllowUpdateIPs };\n\n"
+		}
+	}
+
+	if (@allow_update > 0) {
+		$ZoneDDNS .= "\t\tallow-update {\n\t\t\t".
+								join(";\n\t\t\t", @allow_update).
+								";\n\t\t};\n";
+	}
+
+	# is this a zone the master should manage for DNSSec ?
+	if ($AuthInfo{'dnssec'} eq 'ena') {
+		$ZoneDDNS .= "\t\tauto-dnssec maintain;\n";
+	}
+
+	return ($GlobalDDNS, $ZoneDDNS, $ZoneDHCP);
 }
- 
+
 
 # Load the services.sif file. 
+# This function untouched during rewrite -- GLS, 2010/01/20
 sub load_services {
   my ($File) = @_;
 
   # These are the returned structures
-  my %ServerGroup;
+  my %DNSSrvGrp;
   my %ServerView;
   my %ServerAuth;
   my %Machines;
@@ -526,7 +560,6 @@ sub load_services {
 
   open(FILE, $File) || die_msg("Cannot open services file: $File\n");
   my ($depth, $loc, $SName, $SType,$MType,$MName) = (0,0,'','','','');
-  %KeyLoaded = ();
 
   while(my $line = <FILE>) {
     if ($depth == 0) {
@@ -537,7 +570,7 @@ sub load_services {
 	$depth++;
 	if ($SType eq 'DNS Server Group') {
 	  $loc = 1;
-	  $ServerGroup{$SName} = {};
+	  $DNSSrvGrp{$SName} = {};
 	  print "Defined Group $SName\n";
 	}elsif($SType eq 'DNS View Definition') {
 	  $loc = 2;
@@ -571,39 +604,35 @@ sub load_services {
 	  $ServerView{$SName}->{'version'} = $AVal;
 	}elsif($loc == 2 && $AKey eq 'DNS Parameter') {
 	  push(@{$ServerView{$SName}->{'params'}}, $AVal);
-	}elsif($loc == 2 && $AKey eq 'Raw DNS Parameter') {
-	  push(@{$ServerView{$SName}->{'raw_param'}}, $AVal);
 	}elsif($loc == 2 && $AKey eq 'Import Unspecified Zones') {
 	  $ServerView{$SName}->{'import'} = $AVal;
         }elsif($loc == 1 && $AKey eq 'Forward To') {
-	  $ServerGroup{$SName}->{'forward_to'} = $AVal;
+	  $DNSSrvGrp{$SName}->{'forward_to'} = $AVal;
 	}
 	## Look for members of a service
       }elsif($line =~ /member\s*type\s*\"([^\"]*)\"\s*name\s*\"([^\"]*)\"/) {
 	($MType, $MName) = ($1, $2);
 	if ($MType eq '' || $MName eq '') {
-	  CMU::Netdb::netdb_mail('dns-config.pl', 
-				 "In service $SName, Type or Name of member ".
-				 "is blank: ($MType), ($MName).");
+	  warn_msg( "In service $SName, Type or Name of member is blank: ($MType), ($MName).");
 	}
 	  
 	$depth++;
 	
 	if ($loc == 1 && $MType eq 'dns_zone') {
-	  $ServerGroup{$SName}->{'zones'}->{$MName} = {};
+	  $DNSSrvGrp{$SName}->{'zones'}{$MName} = {};
 	  $loc = 5;
 	}elsif($loc == 1 && $MType eq 'service') {
-	  $ServerGroup{$SName}->{'views'}->{$MName} = {};
+	  $DNSSrvGrp{$SName}->{'views'}{$MName} = {};
 	  $loc = 6;
 	}elsif($loc == 1 && $MType eq 'machine') {
 	  $MName = lc($MName);
-	  $ServerGroup{$SName}->{'machines'}->{$MName} = {};
+	  $DNSSrvGrp{$SName}->{'machines'}{$MName} = {};
 	  $loc = 7;
 	}elsif($loc == 20 && $MType eq 'machine') {
 	  $MName = lc($MName);
-	  $ServerAuth{$SName}->{'machines'}->{$MName} = {};
+	  $ServerAuth{$SName}->{'machines'}{$MName} = {};
 	}elsif($loc == 20 && $MType eq 'dns_zone') {
-	  $ServerAuth{$SName}->{'zones'}->{$MName} = {};
+	  $ServerAuth{$SName}->{'zones'}{$MName} = {};
 	}
 
       }elsif($loc == 10) {
@@ -638,22 +667,20 @@ sub load_services {
 	$AVal =~ s/\s+$//;
 
 	if ($loc == 5 && $AKey eq 'Zone Parameter') {
-	  push(@{$ServerGroup{$SName}->{'zones'}->{$MName}->{'params'}},
+	  push(@{$DNSSrvGrp{$SName}->{'zones'}{$MName}{'params'}},
 	       $AVal);
 	}elsif($loc == 5 && $AKey eq 'Zone In View') {
 	  print "pushing view $SName $MName $AVal\n";
-	  push(@{$ServerGroup{$SName}->{'zones'}->{$MName}->{'views'}},
+	  push(@{$DNSSrvGrp{$SName}->{'zones'}{$MName}{'views'}},
 	       $AVal);
 	}elsif($loc == 6 && $AKey eq 'Service View Name') {
-	  $ServerGroup{$SName}->{'views'}->{$MName}->{'name'} = $AVal;
+	  $DNSSrvGrp{$SName}->{'views'}{$MName}{'name'} = $AVal;
 	}elsif($loc == 6 && $AKey eq 'Service View Order') {
-	  $ServerGroup{$SName}->{'views'}->{$MName}->{'order'} = $AVal;
+	  $DNSSrvGrp{$SName}->{'views'}{$MName}{'order'} = $AVal;
 	}elsif($loc == 7 && $AKey eq 'Server Type') {
-	  $ServerGroup{$SName}->{'machines'}->{$MName}->{'type'} = $AVal;
+	  $DNSSrvGrp{$SName}->{'machines'}{$MName}{'type'} = $AVal;
 	}elsif($loc == 7 && $AKey eq 'Server Version') {
-	  $ServerGroup{$SName}->{'machines'}->{$MName}->{'version'} = $AVal;
-	}elsif($loc == 7 && $AKey eq 'Server Block Parameter') {
-	  push(@{$ServerGroup{$SName}->{'server_blocks'}->{$MName}}, $AVal);
+	  $DNSSrvGrp{$SName}->{'machines'}{$MName}{'version'} = $AVal;
 	}
       }
 
@@ -666,7 +693,5 @@ sub load_services {
   }
   close(FILE);
 
-  return (\%ServerGroup, \%ServerView, \%ServerAuth, \%Machines, \%Zones);
+  return (\%DNSSrvGrp, \%ServerView, \%ServerAuth, \%Machines, \%Zones);
 }
-
-
