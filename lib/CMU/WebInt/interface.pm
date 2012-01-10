@@ -644,20 +644,20 @@ sub generic_tprint {
 
   print "<table border=1 width=$PAGEWIDTH>\n";
   while($tarr[$i]) {
-    print "<tr>" if ($i % 2 == 1);
-    print "<tr bgcolor=$TACOLOR>" if ($i % 2 == 0);
+    print "<tr>\n" if ($i % 2 == 1);
+    print "<tr bgcolor=$TACOLOR>\n" if ($i % 2 == 0);
     $missedKey = 0;
 
     $kout = (defined $keyField?${$tarr[$i]}[$keyField]:'');
     $k = 0;
     foreach $f (@pFields) {
       if ($i == 0) {
-	$out = "<font size=+0>";
+	$out = "<b><font size=+0>";
 	$out .= "<a tabindex=\"100\" href=\"".CMU::WebInt::encURL("$url?op=$listop&$sortparam=$sortFields->[$k]")."\">" 
 	  if ($listop ne '' && defined $sortFields->[$k] && $sortFields->[$k] ne '');
-	$out .= "<b>".$printmap->{$ { $tarr[$i]}[$f]}."</b>";
+	$out .= $printmap->{$ { $tarr[$i]}[$f]};
         $out .= "</a>" if ($listop ne '' && defined $sortFields->[$k] && $sortFields->[$k] ne '');
-	$out .= "</font>";
+	$out .= "</font></b>";
       }else{
         $out = $ {$tarr[$i]}[$f];
       } 
@@ -665,33 +665,42 @@ sub generic_tprint {
 	if ($infoprefix ne '') {
 	  print "<td><a tabindex=\"100\" href=\"".
 	    CMU::WebInt::encURL("$url?$infoprefix$kout")."\">$out</a></td>\n";
-	} else { 
-	  print "<td>$out</td>\n";
+	} else {
+          if ($i == 0) {
+	    print "<th>$out</th>\n";
+	  } else {
+	    print "<td>$out</td>\n";
+	  }
 	}
 	  
 	$missedKey = 0;
       }else{
 	$missedKey = 1 if ($f == $nameField);
 	$out = '&nbsp;' if (!defined $out || $out eq '');
-	print "<td>$out</td>\n";
+	if ($i ==0) {
+	  print "<th>$out</th>\n";
+	} else {
+	  print "<td>$out</td>\n";
+	}
       }
       $k++;
     }
     foreach $f (@{$eCol}) {
-      print "<td>";
      if ($i == 0) {
-	print "<b><font size=+0>";
+	print "<th><b><font size=+0>";
 	print "<a tabindex=\"100\" href=\"".
 	  CMU::WebInt::encURL("$url?op=$listop&$sortparam=$sortFields->[$k]")."\">" 
 	    if ($listop ne '' && defined $sortFields->[$k] && $sortFields->[$k] ne '');
 	print $f->($url, 0, $uData)."</font></b>";
 	print "</a>" if ($listop ne '' && defined $sortFields->[$k] && $sortFields->[$k] ne '');
+	print "</th>\n";
       }else{
+	print "<td>";
 	my $lout = $f->($url, $tarr[$i], $uData);
 	$lout = '&nbsp;' if ($lout eq '');
 	print $lout;
+	print "</td>";
       }
-      print "</td>\n";
       $k++;
     }
 
