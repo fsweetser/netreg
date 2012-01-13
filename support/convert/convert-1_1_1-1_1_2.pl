@@ -40,7 +40,7 @@
 use strict;
 use Fcntl ':flock';
 
-
+use lib '../bin';
 BEGIN {
   my @LPath = split(/\//, __FILE__);
   push(@INC, join('/', @LPath[0..$#LPath-1]));
