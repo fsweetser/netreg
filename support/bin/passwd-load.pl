@@ -83,14 +83,19 @@
 #
 #
 
-use lib "/usr/ng/lib/perl5";
+use strict;
+use warnings;
+use Carp;
 use DBI;
+use English;
 
 BEGIN {
   my @LPath = split(/\//, __FILE__);
   push(@INC, join('/', @LPath[0..$#LPath-1]));
 }
 
+my $user_home = '\/home\/';
+my $passwd = "/etc/passwd";
 use vars_l;
 use lib $vars_l::NRLIB;
 use CMU::Netdb;
@@ -99,9 +104,6 @@ use CMU::Netdb::helper;
 
 use Data::Dumper;
 
-use strict;
-
-
 my $console = 0;
 my $mail_log = "";
 
@@ -109,12 +111,14 @@ if ($ARGV[0] && $ARGV[0] eq '-console') {
   $console = 1;
 } 
 
-my $logfile = "/home/netreg/logs/user_sync-$$.log"; # eww. should fix. -kevinm
+my $logfile = "$NRHOME/logs/passwd-load-$$.log";
 my $date = localtime; 
 
 my $dbh;
+my $LOG;
 unless ($console) {
-  open(LOGFILE,">>$logfile") || die "unable to open $logfile for append";
+  open $LOG, '>>', $logfile 
+	or croak "unable to open $logfile for append";
 }
 
 writelog(0,"$date: user_sync started") ;
@@ -128,28 +132,29 @@ if (!$dbh) {
 getLock($dbh, 'USERSYNC_LOCK', 'user_sync.pl', 60);
 
 
-my %l_users;
+# p_users is the hash of users from passwd file
+my %p_users;
 
-open(FILE, "/afs/andrew/common/etc/passwd");
-while(<FILE>) {
+open my $PASS_FILE, '<', $passwd 
+	or croak "Can't open '$passwd': $OS_ERROR";
+while(<$PASS_FILE>) {
   my ($uname, $pwd, $uid, $gid, $name, $hdir) = split(/\:/, $_);
-  next unless ($hdir =~ /\/afs\/andrew/);
+  next unless ($hdir =~ /$user_home/);
 
   # kevinm - hacks for now
   next if ($uname eq 'netreg');
-  $uname .= '@ANDREW.CMU.EDU';
 
-  $l_users{lc($uname)} = $name;
+  $p_users{lc($uname)} = $name;
 }
-close(FILE);
+close($PASS_FILE);
 
-writelog(0,"Loaded ".scalar(keys(%l_users))." users from passwd file.\n");
+writelog(0,"Loaded ".scalar(keys(%p_users))." users from passwd file.\n");
 
   
 #get the list of all users currently in the db
-my $ref = CMU::Netdb::auth::list_users($dbh,'netreg', ''); # bleh
-my %upos = %{CMU::Netdb::makemap($ref->[0])};
-my @user_list = @{$ref};
+my $lu_ref = CMU::Netdb::auth::list_users($dbh,'netreg', ''); # bleh
+my %upos = %{CMU::Netdb::makemap($lu_ref->[0])};
+my @user_list = @{$lu_ref};
 
 
 #throw all those users into a hash key=user.name value=user.comment
@@ -158,38 +163,35 @@ my %db_users;
 foreach my $user (@user_list) {
   my ($name, $desc) = ($user->[$upos{'credentials.authid'}],
 		       $user->[$upos{'credentials.description'}]);
-  # kevinm - hack for now. eventually this entire script should be replaced
-  # by something that does ldap, like the good old days.
-  next unless ($name =~ /\@andrew\.cmu\.edu$/i);
   $db_users{lc($name)} = $desc;
 }
 
 writelog(0,"Loaded ".scalar(keys(%db_users))." users from database.\n");
 
-#this compares the two hashes to see what is missing from where.  When finished, %l_users
+#this compares the two hashes to see what is missing from where.  When finished, %c_users
 #contains all the users we have to add to the db, while %e_users contains people who are in
-#the db but not in the LDAP (which shouldn't happen) and will be logged somehow.
+#the db but not in the passwd file and will be logged somehow.
 
 # %c_users are users that we need to change
 my %c_users;
+# %e_users are the users that are in the database, but not in the passwd file
 my %e_users;
-foreach my $key (keys %db_users) {
-  if (defined $l_users{$key}) {
-    if ($l_users{$key} ne $db_users{$key}) {
-      $c_users{$key} = $l_users{$key};
+foreach my $db_name (keys %db_users) {
+  if (defined $p_users{$db_name}) {
+    if ($p_users{$db_name} ne $db_users{$db_name}) {
+      $c_users{$db_name} = $p_users{$db_name};
     }
-    delete $l_users{$key};
+    delete $p_users{$db_name};
   } else {
-    $e_users{$key} = $db_users{$key};
+    $e_users{$db_name} = $db_users{$db_name};
   }
 }
 
-writelog(0,"Found ".scalar(keys(%l_users))." users from passwd not in the db.\n");
+writelog(0,"Found ".scalar(keys(%p_users))." users from passwd not in the db.\n");
 
-#for each user in the LDAP hash that is left after removing those already in the db (above),
+#for each user in the passwd hash that is left after removing those already in the db (above),
 #we call the add_user with the user.name and user.comment and throw it into the db
-my %user_info;
-foreach my $key (keys %l_users) {
+foreach my $passwd_name (keys %p_users) {
   # start a transaction
   my ($xtres, $xtref) = CMU::Netdb::xaction_begin($dbh);
   my $in_transaction = 0;
@@ -215,29 +217,29 @@ foreach my $key (keys %l_users) {
   }
 
   my %fields = ('user' => $II,
-		'authid' => $key,
-		'description' => $l_users{$key});
-  my %$fcopy = %fields;
+		'authid' => $passwd_name,
+		'description' => $p_users{$passwd_name});
+  my $fcopy = \%fields;
 
   ($res, $ret) = CMU::Netdb::add_credentials($dbh, 'netreg', \%fields);
 
   if ($res != 1) {
-    writelog(1,"- error adding credential $key to user $II: $res [".join(', ',@$ret)."]: \n".
+    writelog(1,"- error adding credential $passwd_name to user $II: $res [".join(', ',@$ret)."]: \n".
       Data::Dumper->Dump([$fcopy],['fields'])."\n");
     CMU::Netdb::xaction_rollback($dbh) if ($in_transaction);
     next;
   }
-  writelog(0,"- user added:  name=$key, description=".$l_users{$key}."\n");
+  writelog(0,"- user added:  name=$passwd_name, description=".$p_users{$passwd_name}."\n");
   CMU::Netdb::xaction_commit($dbh);
 }
 
 # changes
-foreach my $key (keys %c_users) {
+foreach my $cred_name (keys %c_users) {
   # Get the current credential information
   my $cinfo = CMU::Netdb::list_credentials($dbh, 'netreg',
-					   "authid = '$key'");
+					   "authid = '$cred_name'");
   if (!ref $cinfo || scalar(@$cinfo) != 2) {
-    writelog(1,"- error listing credential $key (changing): \n".
+    writelog(1,"- error listing credential $cred_name (changing): \n".
 	     Data::Dumper->Dump([$cinfo],['result'])."\n");
     next;
   }
@@ -250,24 +252,24 @@ foreach my $key (keys %c_users) {
   my $V = $cinfo->[1]->[$cpos{'credentials.version'}];
 
   # Change the name
-  $fields{'description'} = $c_users{$key};
+  $fields{'description'} = $c_users{$cred_name};
 
-  my %$fcopy = %fields;
-  my ($res, $ref) = CMU::Netdb::modify_credentials($dbh, 'netreg', $ID, $V,
+  my $fcopy = \%fields;
+  my ($res, $mc_ref) = CMU::Netdb::modify_credentials($dbh, 'netreg', $ID, $V,
 						   \%fields);
   if ($res != 1) {
-    writelog(1,"- error updating credentials for $key to $c_users{$key}: \n".
+    writelog(1,"- error updating credentials for $cred_name to $c_users{$cred_name}: \n".
 	     Data::Dumper->Dump([$fcopy],['fields'])."\n");
     next;
   }
-  writelog(0,"- success updating credentials for $key to $c_users{$key}\n");
+  writelog(0,"- success updating credentials for $cred_name to $c_users{$cred_name}\n");
 }
 
 writelog(0,"- ERROR: ".scalar(keys(%e_users))." users missing from passwd file.\n");
 
 
 if (!$console) {
-  close LOGFILE;
+  close $LOG;
   if ($mail_log) {
     netdb_mail("passwd-load.pl", $mail_log, "Error in passwd-load.pl");
   }
@@ -276,17 +278,15 @@ if (!$console) {
 killLock($dbh, 'USERSYNC_LOCK');
 $dbh->disconnect;
 
-
-
 sub writelog {
   my ($level, $mesg) = @_;
 
   if ($console) {
-    warn $mesg;
+    print "$mesg\n";
   } else {
     if ($level > 0) {
       $mail_log .= $mesg;
     }
-    print LOGFILE $mesg
+    print $LOG $mesg
   }
 }
