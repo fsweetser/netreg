@@ -230,7 +230,7 @@ sub subnetadd {
 
 	foreach my $Z (@Zones) {
 	    # See if the zones already exist
-	    my $rZone = netreg_get_zone($dbh, $Z);
+	    my $rZone = netreg_get_zone($dbh, $Z, 0);
 	    next if (ref $rZone);
 
 	    # Zone doesn't exist
@@ -409,7 +409,7 @@ sub dnsimport_exec {
 
 	# See if the zone exists. If so, we'll compare the values and
 	# modify if necessary.
-	my $rZone = netreg_get_zone($dbh, $Name);
+	my $rZone = netreg_get_zone($dbh, $Name, 0);
 
 	# The zone doesn't exist, so just add it.
 	unless (ref $rZone) {
@@ -449,7 +449,7 @@ sub dnsimport_exec {
 	next if (defined $ZonesReady{uc($Z)});
 
 	# See if it exists
-	my $rZone = netreg_get_zone($dbh, $Z);
+	my $rZone = netreg_get_zone($dbh, $Z, 0);
 
 	if (ref $rZone) {
 	    $ZonesReady{uc($Z)} = 1;
@@ -629,7 +629,7 @@ sub dnsimport_exec {
 			$Rec->{'rdata'} unless ($options{'quiet'});
 		    next;
 		}
-		my $rZone = netreg_get_zone($dbh, $Label);
+		my $rZone = netreg_get_zone($dbh, $Label, 0);
 		unless (ref $rZone) {
 		    carp "Error getting zone information for: $Label"
 			unless ($options{'quiet'});
@@ -910,7 +910,7 @@ sub netreg_zone_tree {
     return if ($name eq '');
 
     # See if $name exists
-    my $rZone = netreg_get_zone($dbh, $name);
+    my $rZone = netreg_get_zone($dbh, $name, 0);
 
     # The zone exists
     return if (ref $rZone);
@@ -968,7 +968,7 @@ sub netreg_get_zone {
     }
 
     # If we've already tried the trick below, just exit
-    return '' if ($inner == 1); # TODO: This line generates a warning that we need to get rid of.
+    return '' if ($inner == 1);
 
     # No results. See if the zone exists but protections don't
 
