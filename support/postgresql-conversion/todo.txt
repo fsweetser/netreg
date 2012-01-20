@@ -1,0 +1,30 @@
+
+side by side compare with production/mysql pages
+
+Remove all calls to long2dot/dot2long
+
+change mac to macaddr type?
+
+subnet mask - int or dotted quad output?
+
+fix sub subnets_lookup
+
+subnet view "network summary" range of addresses
+
+replace all error-based 'unlock tables' with rollback
+            error-based exits with rollback
+            successful exits with commit
+
+make history work
+
+backups
+
+consistency checks!
+
+add perl modules to puppet
+  perl-Net-IPv6Addr
+  perl-Net-IPv4Addr
+  perl-Net-IP
+  perl-Net-IP-Cmatch
+
+bulk registration

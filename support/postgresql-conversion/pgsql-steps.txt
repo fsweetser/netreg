@@ -1,0 +1,91 @@
+Schema Creation
+===============
+
+This step is far from automated.  Instead, it just documents the
+general process that was used to create the pgsql schemas listed here.
+
+.  Extract the existing mysql structure.
+
+mysqldump -d -u root -p netdb > netdb-mysql-structure.sql
+mysqldump -d -u root -p netmon > netmon-mysql-structure.sql
+
+.  Clean up some of the extra mysql specific bits.
+
+sed -e 's/).*;$/);/' -i netdb-structure.sql
+sed -e 's/).*;$/);/' -i netmon-structure.sql
+
+.  Convert the structure from mysql to pgsql format.
+
+./data-migration/mysql2pgsql.perl netdb-mysql-structure.sql netdb-pgsql-structure-new.sql
+./data-migration/mysql2pgsql.perl netmon-mysql-structure.sql netmon-pgsql-structure-new.sql
+
+.  Hand modify column types, including:
+
+machine.ip_address => inet NOT NULL default '0.0.0.0/32',
+machine.expires => date default NULL,
+subnet.base_address => inet NOT NULL default '0.0.0.0/32',
+subnet.network_mask => inet NOT NULL default '0.0.0.0/32',
+subnet.purge_lastdone => timestamp without time zone default NULL,
+_sys_scheduled.previous_run => timestamp without time zone default NULL,
+_sys_scheduled.next_run => timestamp without time zone default NULL,
+_sys_scheduled.blocked_until => timestamp without time zone default NULL,
+dns_zone.last_update => timestamp without time zone default NULL,
+
+
+Data Loading
+============
+
+.  Drop the existing db if necessary
+
+dropdb netdb
+dropdb netmon
+
+.  Create the shiny new database
+
+createdb netdb
+echo "create language plpgsql" | psql netdb
+createdb netmon
+echo "create language plpgsql" | psql netmon
+
+
+.  Load the schema
+
+psql -f netdb-pgsql-structure.sql netdb
+psql -f netmon-pgsql-structure.sql netmon
+
+. Dump and transfer the latest snapshot of the database
+
+cd /tmp
+mkdir netdb
+chmod a+w netdb
+mysqldump -u root -p -T ./netdb netdb
+mkdir netmon
+chmod a+w netmon
+mysqldump -u root -p -T ./netmon netmon
+
+.  Cook the data until golden brown
+
+./sanitize-data.pl
+
+.  Fill in the data
+
+time psql -a -f copy-netdb-data.sql netdb
+time psql -a -f copy-netmon-data.sql netmon
+
+.  Stir the indexes back in
+
+time psql -a -f netdb-index.sql netdb
+time psql -a -f netmon-index.sql netmon
+
+.  Top it off by adjusting all sequences to match current data
+
+./update-sequences.pl netdb | psql netdb
+./update-sequences.pl netmon | psql netmon
+
+. Grant required permissions to relevant users (adjust as needed)
+
+for t in `grep -i 'create table' netdb-pgsql-structure.sql | awk '{print $3}' | sed -e 's/\"//g'` ; do echo grant all on table $t to apache\; ; done | psql netdb
+for t in `grep 'CREATE SEQUENCE' netdb-pgsql-structure.sql | awk '{print $3}' | sed -e 's/"//g'` ; do echo grant all on sequence $t to apache\; ; done | psql netdb
+for t in `grep 'CREATE OR REPLACE FUNCTION' netdb-pgsql-structure.sql | grep check_ | awk '{print $5}' | sed -e 's/(//'` ; do echo grant all on function $t\(\) to apache\; ; done | psql netdb
+
+for t in `cat netmon-tables ` ; do echo grant all on table $t to apache\; ; done | psql netmon
