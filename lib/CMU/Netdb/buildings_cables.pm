@@ -478,7 +478,7 @@ sub list_outlets_cables_munged_protections {
 	join(', ', @CMU::Netdb::structure::outlet_cable_fields).
 	  " FROM outlet LEFT JOIN cable ON outlet.cable = cable.id ".
 	    "LEFT JOIN building ON building.building = cable.to_building ".
-	      "WHERE 1 \n";
+	      "WHERE TRUE \n";
     } else {
       $query = "SELECT DISTINCT ".join(', ', @CMU::Netdb::structure::outlet_cable_fields)."\n".<<END_SELECT;
 FROM credentials AS C,
@@ -496,7 +496,7 @@ END_SELECT
   } elsif ($type eq 'GROUP') {
     $in = $in*-1;
     if (CMU::Netdb::can_read_all($dbh, $dbuser, 'outlet', "(P.identity = '$in')", '')) {
-      $query = "SELECT DISTINCT ".join(', ', @CMU::Netdb::structure::outlet_cable_fields)." FROM outlet LEFT JOIN cable ON outlet.cable = cable.id LEFT JOIN building ON building.building = cable.to_building WHERE 1\n";
+      $query = "SELECT DISTINCT ".join(', ', @CMU::Netdb::structure::outlet_cable_fields)." FROM outlet LEFT JOIN cable ON outlet.cable = cable.id LEFT JOIN building ON building.building = cable.to_building WHERE TRUE\n";
     } else {
       $query = "SELECT DISTINCT ".join(', ', @CMU::Netdb::structure::outlet_cable_fields)."\n".<<END_SELECT;
 FROM credentials AS C, memberships as M, protections as P, outlet LEFT JOIN cable ON outlet.cable = cable.id LEFT JOIN building ON building.building = cable.to_building
@@ -929,14 +929,22 @@ sub add_outlet_preconnected {
 
   # FIXME we are doing verification ourselves that this is okay to do.
   # since we're running this as netreg, start the changelog as the real user first.
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+      $xref = shift @{$xref};
+  }else{
+      return ($xres, $xref);
+  }
   CMU::Netdb::primitives::changelog_id($dbh, $dbuser);
   my $res = CMU::Netdb::primitives::modify($dbh, 'netreg', 'outlet', $$prev{'id'},
 					   $$prev{'version'}, $newfields);
   if ($res < 1) {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($res, []);
   }
   my %warns;
   $warns{ID} = $$prev{'id'};
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($res, \%warns);
 }
 
@@ -1077,6 +1085,15 @@ sub add_outlet {
   
   return ($errcodes{EBLANK}, ['cable']) if ($$fields{'cable'} eq '');
 
+  # TODO
+  # Lock all relevant tables to protect against race conditions
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
   $force = 0;
   if (defined $$fields{'force'}) {
     if (($$fields{'force'} eq 'yes') && ($ul >= 9)) {
@@ -1090,10 +1107,16 @@ sub add_outlet {
 
   if (!($odev =~ /^\d+$/s) && $odev ne '') {
     $$fields{'device'} = CMU::Netdb::valid('outlet.device_string', $$fields{'device'}, $dbuser, 0, $dbh);
-    return (CMU::Netdb::getError($$fields{'device'}), ['device']) if (CMU::Netdb::getError($$fields{'device'}) != 1);
+    if (CMU::Netdb::getError($$fields{'device'}) != 1) {
+      CMU::Netdb::xaction_rollback($dbh);
+      return (CMU::Netdb::getError($$fields{'device'}), ['device']);
+    }
 
     my $mach_rows = CMU::Netdb::list_machines($dbh, 'netreg', "machine.host_name = '$odev'");
-    return (-1, ['device']) if ($#$mach_rows < 1);
+    if ($#$mach_rows < 1) {
+      CMU::Netdb::xaction_rollback($dbh);
+      return (-1, ['device']);
+    }
     
     my %mach_map = %{CMU::Netdb::makemap($mach_rows->[0])};
     $odev = $mach_rows->[1]->[$mach_map{'machine.id'}];
@@ -1106,7 +1129,10 @@ sub add_outlet {
     #    return (CMU::Netdb::getError($$fields{'cable'}), ['cable']) if (CMU::Netdb::getError($$fields{'cable'}) != 1);
 
     my $cable_rows = CMU::Netdb::list_cables($dbh, 'netreg', "cable.label_from = '$ocable'");
-    return (-1, ['cable']) if ($#$cable_rows < 1);
+    if ($#$cable_rows < 1) {
+      CMU::Netdb::xaction_rollback($dbh);
+      return (-1, ['cable']);
+    }
 
     my %cable_map = %{CMU::Netdb::makemap($cable_rows->[0])};
     $ocable = $cable_rows->[1]->[$cable_map{'cable.id'}];
@@ -1115,14 +1141,20 @@ sub add_outlet {
 
   if ($odev != 0) {
     my $mach_rows = CMU::Netdb::list_machines($dbh, 'netreg', "machine.id = '$odev'");
-    return (-1, ['device']) if ($#$mach_rows < 1);
+    if ($#$mach_rows < 1) {
+      CMU::Netdb::xaction_rollback($dbh);
+      return (-1, ['device']);
+    }
   }
 
   if ($odev != 0 && $oport != 0) {
     $oref = CMU::Netdb::list_outlets($dbh, $dbuser, "outlet.device = '$odev' AND ".
-				     " outlet.port = $oport");
-    return ($errcodes{EDEVPORTEXIST}, ['device' , 'port'] )
-      if ($#$oref > 0);
+				     " outlet.port = '$oport'");
+    if ($#$oref > 0) {
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($errcodes{EDEVPORTEXIST}, ['device' , 'port'] );
+    }
+
   }
 
   # check device/trunkset/vlan integrity and make sure that
@@ -1131,7 +1163,10 @@ sub add_outlet {
   # entry, if vlan does not exist on this device.
   if ($odev != 0 && $odev ne '') {
     my ($cret, $cref) = check_dev_outlet($dbh, $dbuser, $fields) ;
-    return ($cret, $cref) if ($cret < 1);
+    if ($cret < 1){
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($cret, $cref);
+    }
     $$fields{'device'} = $cref->[0];
     $odev = $$fields{'device'};
   }
@@ -1139,8 +1174,10 @@ sub add_outlet {
   $ovlan = $$fields{'vlan'}; delete $$fields{'vlan'};
 
   my $orig = CMU::Netdb::list_outlets($dbh, 'netreg', "outlet.cable = '$$fields{'cable'}'");
-  return ($orig, ['cable']) if (!ref $orig);
-  return ($orig, ['cable']) if ($#{$orig} > 1);
+  if ((!ref $orig) or ($#{$orig} > 1)){
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($orig, ['cable']);
+  }
   $mode = 0;
   
   warn __FILE__, ':', __LINE__, ' :>'.
@@ -1157,17 +1194,29 @@ sub add_outlet {
     }
     
     map { $$fields{$_} = $ofields{$_} if (!defined $$fields{$_}) } @outlet_field_short;
-    return ($errcodes{EEXISTS}, ['cable']) if ($ofields{'flags'} =~ /activated/i);
-    return ($errcodes{EEXISTS}, ['cable']) unless ($ofields{'flags'} =~ /permanent/i);
+    if ($ofields{'flags'} =~ /activated/i) { 
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($errcodes{EEXISTS}, ['cable']);
+    }
+    unless ($ofields{'flags'} =~ /permanent/i) {
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($errcodes{EEXISTS}, ['cable']);
+    }
     $mode = 1;
   }
   
   my $dept = $$fields{'dept'};
   delete $$fields{'dept'};
   
-  return ($errcodes{EBLANK}, ['dept']) if ($dept eq '');
+  if ($dept eq '') {
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($errcodes{EBLANK}, ['dept']);
+  }
   my $depts = CMU::Netdb::get_departments($dbh, $dbuser, " groups.name = '$dept'", 'ALL', '', 'groups.id');
-  return ($errcodes{EPERM}, ['dept']) if (!ref $depts || !defined $$depts{$dept});
+  if (!ref $depts || !defined $$depts{$dept}) {
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($errcodes{EPERM}, ['dept']);
+  }
   
   warn __FILE__, ':', __LINE__, ' :>'.
     "MODE:: $mode\n" if ($debug >= 2);
@@ -1224,22 +1273,8 @@ sub add_outlet {
   }
   # in this case, we need to rollback the outlet and tell the user
   if ($success < 1) {
-    # find the version field. grr. this sucks.
-    my $version = get_outlet_version($dbh, 'netreg', 
-				     " outlet.id = '$$ref{ID}' ");
-    my $dm;
-    # since we're running this as netreg, start the changelog as the real user first.
-    CMU::Netdb::primitives::changelog_id($dbh, $dbuser);
-    if ($mode) {
-      $dm = CMU::Netdb::modify_outlet($dbh, 'netreg', $$ref{ID}, $version, \%ofields, $ul);
-    } else {
-      $dm = CMU::Netdb::delete_outlet($dbh, 'netreg', $$ref{ID}, $version);
-    }
-    if ($dm == 1) {
-      return(0, ['protections', 'removed']);
-    } else {
-      return(0, ['protections', 'outlet_registered']); # FIXME send mail?
-    }
+    CMU::Netdb::xaction_rollback($dbh);
+    return (0, ['protections'])
   }
 
   # Here, take care about outlet_vlan_membership, if vlan exist...
@@ -1247,9 +1282,15 @@ sub add_outlet {
   # or without device though. So if vlan and device both exist then create
   # and entry in outlet_vlan_membership, otherwise silently return...
   if (defined $ovlan && $ovlan ne '' && (($odev != 0 ) || $force)) {
-    return (-14, ['vlan']) unless ($ovlan =~ /^\d+$/s) ;
+    unless ($ovlan =~ /^\d+$/s) {
+      CMU::Netdb::xaction_rollback($dbh);
+      return (-14, ['vlan']);
+    }
     my $vref = CMU::Netdb::list_vlans($dbh, $dbuser, "vlan.id = '$ovlan'");
-    return (-1, ['vlan']) if (!ref $vref || $#$vref == 0) ;
+    if (!ref $vref || $#$vref == 0) {
+      CMU::Netdb::xaction_rollback($dbh);
+      return (-1, ['vlan']);
+    }
       
     my %vfields = ('outlet' => $$ref{ID},
 		   'vlan' => $ovlan,
@@ -1257,10 +1298,15 @@ sub add_outlet {
 		   'trunk_type' => 'none',
 		   'status' => 'request');
     my ($vres, $vvref) = CMU::Netdb::add_outlet_vlan_membership($dbh, $dbuser, \%vfields);
-    $$ref{VERROR} = $vvref if ($vres != 1);
+    if ($vres != 1) {
+      $$ref{VERROR} = $vvref;
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($vres, $vvref);
+    }
     $$ref{VID} = $$vvref{insertID} if ($vres == 1);
   }
-  
+
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($res, $ref);
 }
 
@@ -2100,6 +2146,13 @@ sub modify_outlet {
     $$newfields{"outlet.$key"} = $$fields{$key};
   }
   
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
   warn  __FILE__, ':', __LINE__, " :> Updating outlet $id:\n" 
     . Data::Dumper->Dump([$newfields],['fields']) if ($debug >= 3);
   $result = CMU::Netdb::primitives::modify($dbh, $dbuser, 'outlet', $id, $version, $newfields);
@@ -2111,6 +2164,7 @@ sub modify_outlet {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::modify_outlet: $query\n" if ($debug >= 2);
     $sth->execute();
+    CMU::Netdb::xaction_rollback($dbh);
     if ($sth->rows() == 0) {
       warn __FILE__, ':', __LINE__, ' :>'.
 	"CMU::Netdb::auth::modify_outlet: id/version were stale\n" if ($debug);
@@ -2135,8 +2189,21 @@ END_DELETE
   warn __FILE__, ':', __LINE__, ' :>'.
     "DEPT 2: $dept\n" if ($debug >= 2);
   if ($dept ne '') {
-    $dbh->do("LOCK TABLES protections WRITE, outlet READ, groups READ, users as U READ,".
-	     "_sys_changelog WRITE , _sys_changerec_row WRITE, _sys_changerec_col WRITE");
+    my @locks = (
+		 "_sys_changelog",
+		 "_sys_changerec_col",
+		 "_sys_changerec_row",
+		 "groups",
+		 "outlet",
+		 "protections",
+		 "users"
+		);
+    my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
+    unless($lockres == 1){
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($errcodes{"EDB"}, $lockref);
+    }
+
     $query =<<END_SELECT;
 SELECT protections.id
   FROM protections, outlet, groups
@@ -2156,7 +2223,7 @@ END_SELECT
 	"CMU::Netdb::buildings_cables::modify_outlet:: Unknown error\n$DBI::errstr\n" if ($debug);
       # FIXME send mail
       $warns{dept} = 'DBI failure';
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       return ($result, \%warns);
     }    
     my @row = $sth->fetchrow_array();
@@ -2180,15 +2247,20 @@ END_SELECT
       warn __FILE__, ':', __LINE__, ' :>'.
 	"CMU::Netdb::buildings_cables::modify_outlet:: Query: UPDATE protections SET identity = -1*$$depts{$dept} WHERE id = '$row[0]'" if ($debug >= 2);
     }
-    $warns{dept} = 'DBI Failure' if ($nres != 1);
-    $dbh->do("UNLOCK TABLES");
+    if ($nres != 1) {
+      $warns{dept} = 'DBI Failure';
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($result, \%warns);
+    }
   }
 
   warn "Old Vlan $oldvlan, New Vlan $primaryvlan\n" if ($debug);
   my ($vlres, $vlref) = update_primaryvlan($dbh, $dbuser, {'id' => $id, 'newDevice' => '1', 'oldDevice' => '0', 'oldVlan' => $oldvlan, 'newVlan' => $primaryvlan});
   if ($vlres <= 0) {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($errcodes{"EPARTIAL"}, ['outlet_vlan_membership', $vlres, @$vlref]);
   }
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($result, \%warns);
 }
 
@@ -2869,7 +2941,7 @@ sub add_outlet_vlan_membership {
     if ($res < 1) {
       return ($res, ['primitives::add']);
     }
-    my %warns = ('insertID' => $dbh->{'mysql_insertid'});
+    my %warns = ('insertID' => $dbh->last_insert_id(undef, undef, "outlet_vlan_membership", undef);
     return ($res, \%warns);
   } else {
     return ($CMU::Netdb::errocodes{EPERM}, ['status']);

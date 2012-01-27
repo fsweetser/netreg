@@ -254,7 +254,7 @@ sub list_dns_resource_zones {
   $dbuser = CMU::Netdb::valid('credentials.authid', $dbuser, $dbuser, 0, $dbh);
   return CMU::Netdb::getError($dbuser) if (CMU::Netdb::getError($dbuser) != 1);
   
-  $where = '1' if ($where eq '');
+  $where = 'TRUE' if ($where eq '');
   my $nwhere = "dns_zone.id = dns_resource.name_zone AND $where";
   my @f = (@dns_resource_fields, @dns_zone_fields);
   
@@ -538,9 +538,9 @@ sub list_dhcp_machine_options {
   
   $result = CMU::Netdb::primitives::list
     ($dbh, $dbuser, 
-     'machine LEFT JOIN dhcp_option ON dhcp_option.tid = machine.id AND '.
-     'dhcp_option.type = "machine" LEFT JOIN dhcp_option_type ON '.
-     'dhcp_option.type_id = dhcp_option_type.id', \@header, $where);
+     "machine LEFT JOIN dhcp_option ON dhcp_option.tid = machine.id AND " .
+     "dhcp_option.type = 'machine' LEFT JOIN dhcp_option_type ON " .
+     "dhcp_option.type_id = dhcp_option_type.id", \@header, $where);
   
   if (!ref $result) { 
     return ($result,[]);
@@ -616,9 +616,17 @@ sub add_dns_zone {
     $$newfields{'dns_zone.parent'} = $r;
   }
   
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
   my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'dns_zone', $newfields);
   my %warns = (insertID => $CMU::Netdb::primitives::db_insertid);
   if ($res < 1) {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($res, []);
   }
   
@@ -653,7 +661,8 @@ sub add_dns_zone {
 	  "dns_zone/$warns{insertID}: ".join(',', @$AErrf)."\n";
     }
   }
-    
+
+  CMU::Netdb::xaction_commit($dbh, $xref);    
   return ($res, \%warns);
 }
 
@@ -1112,9 +1121,17 @@ sub add_dns_resource {
     }
   }
 
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
   my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'dns_resource', 
 					$newfields);
   if ($res < 0) {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($res, ['prim_add']);
   }
   
@@ -1122,6 +1139,7 @@ sub add_dns_resource {
   CMU::Netdb::force_zone_update($dbh, $$newfields{'dns_resource.name_zone'});
   CMU::Netdb::force_zone_update($dbh, $$newfields{owner_tid})
       if ($$newfields{type} == 'dns_zone' && $$newfields{owner_tid} != $$newfields{name_zone});;
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($res, \%warns);
 }
 
@@ -1225,9 +1243,17 @@ sub add_dhcp_option_type {
       if (CMU::Netdb::getError($Res) != 1);
     $$newfields{"dhcp_option_type.format"} = $Res;
   }
-  
+
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
   my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'dhcp_option_type', $newfields);
   if ($res < 1) {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($res, []);
   }
   my %warns = ('insertID' => $CMU::Netdb::primitives::db_insertid);
@@ -1255,6 +1281,7 @@ sub add_dhcp_option_type {
 	  "dhcp_option_type/$warns{insertID}: ".join(',', @$AErrf)."\n";
     }
   }
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($res, \%warns);
   
 }
@@ -1492,6 +1519,13 @@ if ($$newfields{'dns_zone.type'} =~ /-toplevel$/) {
   $$newfields{'dns_zone.parent'} = $r;
 }
 
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
 $result = CMU::Netdb::primitives::modify($dbh, $dbuser, 'dns_zone', $id, $version, $newfields);
 
 if ($result == 0) {
@@ -1504,12 +1538,15 @@ if ($result == 0) {
   if ($sth->rows() == 0) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::modify_dns_zone: id/version were stale\n" if ($debug);
+    CMU::Netdb::xaction_rollback($dbh);
     return ($CMU::Netdb::errcodes{"ESTALE"}, ['stale']);
   } else {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($CMU::Netdb::errcodes{"ERROR"}, ['unknown']);
   }
 }
 
+CMU::Netdb::xaction_commit($dbh, $xref);
 return ($result,[]);
 
 }
@@ -1792,6 +1829,13 @@ sub delete_dns_resource {
     # FIXME send mail
   }
   return ($CMU::Netdb::errcodes{EPERM}, ['owner_tid', 'low_rights']) if ($rlevel < 1);
+
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
   
   # since we're running this as netreg, start the changelog as the real user first.
   CMU::Netdb::primitives::changelog_id($dbh, $dbuser);
@@ -1809,15 +1853,18 @@ sub delete_dns_resource {
     if ($sth->rows() == 0) {
       warn __FILE__, ':', __LINE__, ' :>'.
 	"CMU::Netdb::auth::delete_dns_resource: id/version were stale\n" if ($debug);
+      CMU::Netdb::xaction_rollback($dbh);
       return ($CMU::Netdb::errcodes{"ESTALE"}, ['stale']);
     } else {
+      CMU::Netdb::xaction_rollback($dbh);
       return ($result, $dref);
     }
   }
   
   CMU::Netdb::force_zone_update($dbh, $ofields{name_zone});
   CMU::Netdb::force_zone_update($dbh, $ofields{owner_tid})
-      if ($ofields{type} == 'dns_zone' && $ofields{owner_tid} != $ofields{name_zone});;
+      if ($ofields{type} == 'dns_zone' && $ofields{owner_tid} != $ofields{name_zone});
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($result, []);
   
 }
@@ -2035,7 +2082,12 @@ sub update_zone_serials {
   
   if (keys %updzones) {
     # FIXME not logging zone serial updates, for now.  -vitroth
-
+    my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+    if ($xres == 1){
+	$xref = shift @{$xref};
+    }else{
+	return ($xres, $xref);
+    }
     # hrm. I wonder how large an IN statement can be :)
     $query = "UPDATE dns_zone SET soa_serial = soa_serial + 1, last_update = '$updtime', version=version ".
       " WHERE id IN (".join(',', keys %updzones).")";
@@ -2043,6 +2095,7 @@ sub update_zone_serials {
       "CMU:Netdb::dns_dhcp::update_zone_serials::query: $query\n";
     $dbh->do($query);
     # FIXME check return value
+    CMU::Netdb::xaction_commit($dbh, $xref);
   }
   
   return 1;
@@ -2052,7 +2105,7 @@ sub update_zone_serials {
 sub force_zone_update {
   my ($dbh, $zone) = @_;
   my $pzone = getParent($zone, $dbh, 'netreg');
-  my $query = "UPDATE dns_zone SET last_update = 0, version=version ".
+  my $query = "UPDATE dns_zone SET last_update = now(), version=version ".
     " WHERE id = $pzone";
   $dbh->do($query);
   warn __FILE__, ':', __LINE__, ' :>'.
