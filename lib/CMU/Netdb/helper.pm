@@ -40,7 +40,7 @@ require Exporter;
 	     getLock killLock get_sys_key delete_sys_key replace_sys_key
 	     remove_dept_tag_hash2 unique pruneLocks mask2CIDR exec_cleanse
 	     xaction_begin xaction_commit xaction_rollback netdb_debug
-	     CIDR2mask get_db_variable );
+	     CIDR2mask get_db_variable lock_tables);
 
 $debug = 0;
 
@@ -83,13 +83,17 @@ sub remove_dept_tag_hash2 {
 # given an IP address as a long int, returns the 
 # dotted-quad equivalent
 sub long2dot {
-  return join('.', unpack('C4', pack('N', $_[0])));
+    if($_[0] =~ /^\d+$/){
+	return join('.', unpack('C4', pack('N', $_[0])));
+    }
+    return $_[0];
 }
 
 # given an IP address as a dotted-quad, returns the
 # long int equivalent
 sub dot2long {
-  return unpack('N', pack('C4', split(/\./, $_[0])));
+  # return unpack('N', pack('C4', split(/\./, $_[0])));
+    return @_[0];
 }
 
 # given a netmask in the form a.b.c.d (or one integer), calculates
@@ -144,7 +148,7 @@ sub calc_bcast {
   my ($nn, $nm) = @_;
 
   return CMU::Netdb::long2dot(&CMU::Netdb::dot2long($nn) |
-                  ~CMU::Netdb::dot2long($nm));
+		   ~CMU::Netdb::dot2long($nm));
 }
 
 sub netdb_mail {
@@ -299,7 +303,19 @@ sub pruneLocks {
   my $now = time();
   my $RebootTime = $now - $time;
   
-  $dbh->do("LOCK TABLE _sys_info WRITE");
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
+  my @locks = ("_sys_info");
+  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
+  unless($lockres == 1){
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($errcodes{"EDB"}, $lockref);
+  }
   my $query = "SELECT sys_key, sys_value FROM _sys_info ".
     " WHERE sys_key like '%_LOCK' ";
   my $Keys = $dbh->selectall_arrayref($query);
@@ -310,7 +326,7 @@ sub pruneLocks {
     }
   }
 
-  $dbh->do("UNLOCK TABLES");
+  CMU::Netdb::xaction_commit($dbh, $xref);
 }
   
 
@@ -318,11 +334,24 @@ sub pruneLocks {
 # arguments: database handle, SCHEDULED_LOCK, scheduled.pl, 20
 sub getLock {
   my ($dbh, $name, $file, $timeout) = @_;
-  $dbh->do("LOCK TABLE _sys_info WRITE");
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
+  my @locks = ("_sys_info");
+  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
+  unless($lockres == 1){
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($errcodes{"EDB"}, $lockref);
+  }
+
   
   my ($res, $val) = CMU::Netdb::get_sys_key($dbh, $name);
   if ($res > 0) {
-    $dbh->do("UNLOCK TABLES");
+    CMU::Netdb::xaction_commit($dbh, $xref);
     if ($timeout ne '') {
       my $diff = time()-$val;
       if ($diff > (60*$timeout)) {
@@ -333,7 +362,7 @@ sub getLock {
   }
   
   CMU::Netdb::replace_sys_key($dbh, $name, time());
-  $dbh->do("UNLOCK TABLES");
+  CMU::Netdb::xaction_commit($dbh, $xref);
 }
   
 sub killLock {
@@ -363,11 +392,19 @@ sub replace_sys_key {
   my ($dbh, $key, $value) = @_;
   my $query;
   return ($CMU::Netdb::errors::errcodes{ERROR}, ['sys_key']) if ($key eq '');
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
   $query = "REPLACE INTO _sys_info (sys_key, sys_value) VALUES ('$key', '$value')";
   
   my $sth = $dbh->prepare($query);
   $sth->execute;
   $sth->finish;
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return 0; # FIXME more error checking?
 }
 
@@ -376,7 +413,14 @@ sub delete_sys_key {
   my $query;
   return ($CMU::Netdb::errors::errcodes{ERROR}, ['sys_key']) if ($key eq '');
   $query = "DELETE FROM _sys_info WHERE sys_key = '$key'";
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
   $dbh->do($query); # FIXME error checking?
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return 0;
 }
 
@@ -405,69 +449,95 @@ sub unique {
   return grep(!$saw{$_}++, @_);
 }
 
-# If we have transactional capabilities, use them
+# Conditionally begin a transaction.  Since Postgres doesn't support
+# nested transactions, in order to minimalize the amount of
+# modifications required we check if we're already in a transaction,
+# and only start one if we're not already in one.  We then return a 1
+# or 0 as the second return value, indicating whether or not this
+# transaction is the "top level" one.  This gets passed to the commit
+# function to ensure we don't accidentally commit a transaction
+# halfway through.
+#
+# See DBD::Pg docs for explanation of ping values.
+
 sub xaction_begin {
   my ($dbh) = @_;
 
+  my $ping = $dbh->ping;
   warn __FILE__, ':', __LINE__, ' :>'.
-    " XACTION_BEGIN\n" if ($debug >= 1);
+    " XACTION_BEGIN Ping State $ping\n" if ($debug >= 1);
+  warn join('|', caller) if ($debug >= 1);
 
-  my ($res, $xaction) = CMU::Netdb::config::get_multi_conf_var
-    ('netdb', 'DBMS_XACTION');
-  
-  if ($xaction) {
-    return ($errcodes{"EDB"}, ['begin_work']) unless($dbh->begin_work());
+
+  if($ping == 1 or $ping == 2){
+      warn "Calling begin_work";
+      if($dbh->begin_work()){
+	  return (1, [$ping]);
+      } else {
+	  return ($errcodes{"EDB"}, ['begin_work']);
+      }
+  }else{
+      return (1, [$ping]);
   }
-  return (1, []);
 }
 
+# The second parameter (ping) should be the ping value returned by the
+# xaction_begin function called in the same context (ie, the same
+# function).  This is used to determine whether we should actually
+# commit, or if there may still be more work to be done, in which case
+# we no-nop.
+#
 # If the commit fails, rollback WILL BE CALLED AUTOMATICALLY
 # Returns two-element array:
 #   1 on success (commit succeeded)
 #   2 on failure of the commit but success of the rollback
 # <=0 indicates failure of commit + failure of the rollback
 sub xaction_commit {
-  my ($dbh) = @_;
-
+  my ($dbh, $ping) = @_;
   warn __FILE__, ':', __LINE__, ' :>'.
-    " XACTION_COMMIT\n" if ($debug >= 1);
+    " XACTION_COMMIT Ping State $ping\n" if ($debug >= 1);
+  warn join('|', caller) if ($debug >= 1);
 
-  my ($res, $xaction) = CMU::Netdb::config::get_multi_conf_var
-    ('netdb', 'DBMS_XACTION');
+  if($ping == 1 or $ping == 2){
+      warn "Calling commit";
+      unless ($dbh->commit()) {
+	  my $str = $dbh->errstr;
+	  my ($r, $d) = CMU::Netdb::xaction_rollback($dbh);
+	  push(@$d, "commit: $str");
 
-  if ($xaction) {
-    unless ($dbh->commit()) {
-      my $str = $dbh->errstr;
-      my ($r, $d) = CMU::Netdb::xaction_rollback($dbh);
-      push(@$d, "commit: $str");
-
-      if ($r <= 0) {
-	return ($r, $d);
-      }else{
-	return (2, $d);
+	  if ($r <= 0) {
+	      return ($r, $d);
+	  }else{
+	      return (2, $d);
+	  }
       }
-    }
+  } else {
+      return (1, []);
   }
-  return (1, []);
 }
 
+# The actual rollback will be called only if we're really in a
+# transaction.  Calls from outside a transaction (ie, a lower context
+# function has already called rollback on us) will just quietly no-op.
+#
 # returns two element array, <= 0 is failure, 1 is success
 sub xaction_rollback {
   my ($dbh) = @_;
 
+  my $ping = $dbh->ping;
   warn __FILE__, ':', __LINE__, ' :>'.
-    " XACTION_ROLLBACK\n" if ($debug >= 1);
+    " XACTION_ROLLBACK Ping State $ping\n" if ($debug >= 1);
+  warn join('|', caller) if ($debug >= 1);
 
-  my ($res, $xaction) = CMU::Netdb::config::get_multi_conf_var
-    ('netdb', 'DBMS_XACTION');
+  if($ping == 3 or $ping == 4){
+      warn "Calling rollback";
+      my $Ret = $dbh->rollback;
 
-  if ($xaction) {
-    my $Ret = $dbh->rollback;
-
-    unless (defined $Ret && $Ret) {
-      my $str = $DBI::errstr || '';
-      return ($errcodes{"EDB"}, ["rollback: $str"]);
-    }
+      unless (defined($Ret) && $Ret) {
+	  my $str = $DBI::errstr || '';
+	  return ($errcodes{"EDB"}, ["rollback: $str"]);
+      }
+      return (1, []);
   }
   return (1, []);
 }
@@ -540,6 +610,23 @@ sub netdb_debug{
     return;
   }
 }    
+
+# Acquires an ACCESS EXCLUSIVE lock on all requested tables.
+
+sub lock_tables {
+    my ($dbh, $tables) = @_;
+
+    # sort to ensure we always lock tables in the same order, preventing deadlocks
+    foreach my $table ( sort @{$tables} ){
+       warn "LOCK TABLE " . $table . " IN ACCESS EXCLUSIVE MODE" if $debug;
+       unless($dbh->do("LOCK TABLE " . $table . " IN ACCESS EXCLUSIVE MODE")){
+           warn "Error locking $table: " . $dbh->errstr;
+           return ($errcodes{"EDB"}, ['lock_tables:' . $dbh->errstr]);
+       }
+    }
+    return (1, []);
+}
+
 
 1;
 
