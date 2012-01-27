@@ -147,8 +147,7 @@ sub get_add_level {
 
   $query = <<END_SELECT;
 SELECT MAX(P.rlevel)
-FROM credentials AS C
-CROSS JOIN protections as P
+FROM (credentials AS C, protections as P)
 LEFT JOIN memberships as M ON (C.user = M.uid AND P.identity = CAST(M.gid AS SIGNED INT) * -1)
 WHERE
   C.authid = '$user'
@@ -199,16 +198,15 @@ sub get_read_level {
 
   $query = <<END_SELECT;
 SELECT MAX(P.rlevel)
-FROM credentials AS C 
-CROSS JOIN protections as P
-LEFT JOIN memberships as M ON (C.user = M.uid AND P.identity = M.gid * -1) 
-WHERE C.authid = '$user'
-  AND P.tname = '$table'
-  AND FIND_IN_SET('READ', P.rights)
-  AND (P.identity = M.gid * -1 OR
-       P.identity = C.user     OR
-       P.identity = 0)
-  AND $TidSelect
+FROM (credentials AS C, protections as P)
+LEFT JOIN memberships as M ON (C.user = M.uid AND P.identity = CAST(M.gid AS SIGNED INT) * -1)
+
+WHERE
+  C.authid = '$user'
+AND  P.tname = '$table'
+AND  FIND_IN_SET('READ', P.rights)
+AND P.identity IN (CAST(M.gid AS SIGNED INT) * -1, C.user, 0)
+AND $TidSelect
 GROUP BY P.tname
 END_SELECT
 
@@ -252,8 +250,7 @@ sub get_write_level {
 
   $query = <<END_SELECT;
 SELECT MAX(P.rlevel)
-FROM credentials AS C
-CROSS JOIN protections as P
+FROM (credentials AS C, protections as P)
 LEFT JOIN memberships as M ON (C.user = M.uid AND P.identity = CAST(M.gid AS SIGNED INT) * -1)
 WHERE
   C.authid = '$user'
@@ -484,7 +481,7 @@ END_SELECT
   } else {
     $query = "SELECT DISTINCT " . (join ', ', @groups_fields) . <<END_SELECT;
     
-FROM (groups, credentials, memberships, credentials AS C CROSS JOIN protections as P)
+FROM (groups, credentials, memberships, credentials AS C, protections as P)
 LEFT JOIN memberships as M ON (M.uid = C.user AND P.identity = CAST(M.gid AS SIGNED INT) * -1)
 WHERE C.authid = '$dbuser'
 AND P.tname = 'groups'
@@ -551,7 +548,7 @@ sub list_groups_administered_by_user {
 
   $query = "SELECT DISTINCT " . (join ', ', @groups_fields) . <<END_SELECT;
 
-FROM      groups, credentials AS C CROSS JOIN protections
+FROM      groups, credentials AS C, protections
 LEFT JOIN memberships ON (memberships.uid = C.user AND
                           protections.identity = CAST(memberships.gid AS SIGNED INT) * -1)
 WHERE
@@ -689,7 +686,7 @@ FROM protections AS P
   LEFT JOIN groups AS G
     ON P.identity = (CAST(G.id AS SIGNED INT) * -1)
 WHERE
-  P.tname = '$table'
+  P.tname = \"$table\"
 AND
   P.tid = '$row'
 END_SELECT
@@ -871,41 +868,29 @@ sub add_group {
     $$newfields{"groups.$key"} = $$fields{$key};
   }
   
-  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
-  if ($xres == 1){
-      $xref = shift @{$xref};
-  }else{
-      return ($xres, $xref);
-  }
-
   $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'groups', $newfields);
   if ($res < 1) {
-    CMU::Netdb::xaction_rollback($dbh);
     return ($res, []);
   }
   my %warns = ('insertID' => $CMU::Netdb::primitives::db_insertid);
   
   ($res, $ref) = CMU::Netdb::auth::add_group_to_protections($dbh, "netreg", $$newfields{"groups.name"}, "groups", $warns{insertID}, "READ", 5, '');
   if ($res < 1) {
-    CMU::Netdb::xaction_rollback($dbh);
     return ($res, $ref);
   }
   
   ($res, $ref) = CMU::Netdb::auth::add_group_to_protections($dbh, "netreg", $$newfields{"groups.name"}, "groups", $warns{insertID}, "WRITE", 1, '');
   if ($res < 1) {
-    CMU::Netdb::xaction_rollback($dbh);
     return ($res, $ref);
   }
   
   if ($$newfields{"groups.name"} =~ /^dept:/) {
     ($res, $ref) = CMU::Netdb::auth::add_group_to_protections($dbh, "netreg", "system:anyuser", "groups", $warns{insertID}, "ADD", 1, '');
     if ($res < 1) {
-    CMU::Netdb::xaction_rollback($dbh);
       return ($res, $ref);
     }
   }
-
-  CMU::Netdb::xaction_commit($dbh, $xref);
+  
   return ($res, \%warns);
 }
 
@@ -934,32 +919,18 @@ sub add_user_to_group {
   return (CMU::Netdb::getError($user), ['groups.id']) if (CMU::Netdb::getError($user) != 1);
 
   # First, lock the tables
-  my @locks = ("_sys_changelog",
-	       "_sys_changerec_col",
-	       "_sys_changerec_row",
-	       "credentials",
-	       "groups",
-	       "memberships",
-	       "protections",
-	       "users",
-	      );
-  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
-  if ($xres == 1){
-      $xref = shift @{$xref};
-  }else{
-      return ($xres, $xref);
-  }
-
-  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
-
-  unless($lockres == 1){
-      CMU::Netdb::xaction_rollback($dbh);
-      return ($errcodes{"EDB"}, $lockref);
+  if (! $dbh->do("LOCK TABLES memberships WRITE, users READ, groups as G READ,
+credentials AS C READ, credentials READ, protections as P READ, users as U READ, 
+memberships as M READ, _sys_changelog WRITE, _sys_changerec_row WRITE,
+_sys_changerec_col WRITE")) {
+    warn __FILE__, ':', __LINE__, ' :>'.
+      "CMU::Netdb::auth::add_user_to_group: Failed to lock tables\n$DBI::errstr\n" if ($debug);
+    return ($errcodes{"ERROR"}, ['db_lock']);
   }
 
   my $ul = CMU::Netdb::get_write_level($dbh, $dbuser, 'groups', $gid);
   if ($ul < 5) {
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{EPERM}, []);
   }
 
@@ -986,6 +957,7 @@ sub add_user_to_group {
       # Now create the changelog row record
       my $rowrec = CMU::Netdb::primitives::changelog_row($dbh, $log, 'memberships', $rowid, 'INSERT');
       if ($rowrec) {
+	my $rowrec = $dbh->{'mysql_insertid'};
 	# Now create the column entries
 	CMU::Netdb::primitives::changelog_col($dbh, $rowrec, 'gid', $gid);
 	CMU::Netdb::primitives::changelog_col($dbh, $rowrec, 'uid', 
@@ -996,7 +968,7 @@ sub add_user_to_group {
     # Our caller may need the original insert id, but we can't reset
     # it, so we invent a new place to put it
     $CMU::Netdb::primitives::db_insertid = $rowid;
-    CMU::Netdb::xaction_commit($dbh, $xref);
+    $dbh->do("UNLOCK TABLES");
     return ($result, {});
   }
 
@@ -1006,12 +978,12 @@ sub add_user_to_group {
   # Did the user exist?
   $rows = CMU::Netdb::primitives::list
     ($dbh, $dbuser, "credentials",
-     \@credentials_fields, "credentials.authid = '$user'");
+     \@credentials_fields, "credentials.authid = \"$user\"");
   return ($rows, ['credentials.authid']) if (!ref $rows);
   if ($#$rows == -1) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::add_user_to_group: No such user\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{"EUSER"}, ['credentials.authid']);
   }
 
@@ -1020,7 +992,7 @@ sub add_user_to_group {
   $query = <<END_SELECT;
 SELECT memberships.uid, memberships.gid
 FROM memberships, credentials AS C, groups AS G
-WHERE C.authid ='$user' AND G.id = '$gid'
+WHERE C.authid ="$user" AND G.id = '$gid'
 AND C.user = memberships.uid AND G.id = memberships.gid
 END_SELECT
 
@@ -1031,12 +1003,12 @@ END_SELECT
   if ($sth->rows() == 1) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::add_user_to_group: $user is already a member of group\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return (1, {});
   }
   
   # Unknown error
-  CMU::Netdb::xaction_rollback($dbh);
+  $dbh->do("UNLOCK TABLES");
   return ($errcodes{"ERROR"}, ['unknown_end']);
 }
 
@@ -1088,30 +1060,16 @@ sub add_user_to_protections {
   }
 
   # First, lock the tables
-  my @locks = (
-	       "_sys_changelog",
-	       "_sys_changerec_col",
-	       "_sys_changerec_row",
-	       "credentials",
-	       "groups",
-	       "memberships",
-	       "protections",
-	       "users",
-	       $table,
-	      );
-
-  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
-  if ($xres == 1){
-    $xref = shift @{$xref};
-  }else{
-    return ($xres, $xref);
-  }
-  
-  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
-
-  unless($lockres == 1){
-    CMU::Netdb::xaction_rollback($dbh);
-    return ($errcodes{"EDB"}, $lockref);
+  $query = "LOCK TABLES protections as P WRITE, protections WRITE,
+users as U READ, credentials AS C READ, credentials READ, users READ,
+groups as G READ, groups READ, memberships as M READ, $table as T READ,
+_sys_changelog WRITE , _sys_changerec_row WRITE,_sys_changerec_col WRITE";
+  $query .= ", $table READ" if (($table ne "users") && ($table ne "groups") &&
+				($table ne "credentials"));
+  if (! $dbh->do($query)) {
+    warn __FILE__, ':', __LINE__, ' :>'.
+      "CMU::Netdb::auth::add_user_to_protections: Failed to lock tables\n$DBI::errstr\n" if ($debug);
+    return ($errcodes{"ERROR"}, ['lock']);
   }
   
   {
@@ -1123,7 +1081,7 @@ sub add_user_to_protections {
     
     my $al = auth_prot_op($dbh, $dbuser, $table, $row, $rlevel, 'ADD', $user, $caller);
     if ($al < 1) {
-      CMU::Netdb::xaction_rollback($dbh);
+      $dbh->do("UNLOCK TABLES");
       return ($al, ['authorization']);
     }
   }
@@ -1131,9 +1089,9 @@ sub add_user_to_protections {
   
   $query = <<END_SELECT;
 INSERT INTO protections (identity, tname, tid, rights, rlevel) 
-SELECT DISTINCT C.user, '$table', $row, '$rights', '$rlevel'
+SELECT DISTINCT C.user, "$table", $row, "$rights", "$rlevel"
 FROM credentials AS C, $table as T
-WHERE C.authid = '$user'
+WHERE C.authid = "$user"
 END_SELECT
   
   $query .= " AND T.id = '$row'" if ($row != 0);
@@ -1144,7 +1102,7 @@ END_SELECT
   $result = $dbh->do($query);
   
   if ($result == 1) {
-    my $rowid = $dbh->last_insert_id(undef, undef, "protections", undef);
+    my $rowid = $dbh->{'mysql_insertid'};
     # since we just inserted a db row directly, we have to do logging here
     # first create the changelog entry
     my $log = CMU::Netdb::primitives::changelog_id($dbh, $dbuser);
@@ -1172,7 +1130,7 @@ END_SELECT
     # it, so we invent a new place to put it
     $CMU::Netdb::primitives::db_insertid = $rowid;
 
-    CMU::Netdb::xaction_commit($dbh, $xref);
+    $dbh->do("UNLOCK TABLES");
     return ($result, {});
   }
 
@@ -1182,12 +1140,12 @@ END_SELECT
   # Did the user exist?
   $rows = CMU::Netdb::primitives::list
     ($dbh, $dbuser, 'credentials',
-     \@credentials_fields, "credentials.authid = '$user'");
+     \@credentials_fields, 'credentials.authid = "$user"');
   return ($rows, ['user']) if (!ref $rows);
   if ($#$rows == -1) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::add_user_to_protections: No such user\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{"EUSER"}, ['user']);
   }
 
@@ -1198,7 +1156,7 @@ END_SELECT
   if ($#$rows == -1) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::add_user_to_protections: No such row in $table\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{"EINVALID"}, ['row']);
   }
 
@@ -1207,9 +1165,9 @@ END_SELECT
   $query = <<END_SELECT;
 SELECT P.rights
 FROM protections as P, credentials AS C
-WHERE C.authid = '$user'
+WHERE C.authid = "$user"
 AND P.identity = C.user
-AND P.tname = '$table'
+AND P.tname = "$table"
 AND P.tid = '$row'
 AND P.rlevel = '$rlevel'
 END_SELECT
@@ -1221,12 +1179,12 @@ END_SELECT
   if ($sth->rows() == 1) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::add_user_to_protections: A protection entry already existed\n" if ($debug);
-    CMU::Netdb::xaction_commit($dbh, $xref);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{"EEXISTS"}, ['tid', 'row']);
   }
   
   # Unknown error
-  CMU::Netdb::xaction_commit($dbh, $xref);
+  $dbh->do("UNLOCK TABLES");
   return ($errcodes{"ERROR"}, ['unknown']);
   
 }
@@ -1281,29 +1239,19 @@ sub add_group_to_protections {
   }
 
   # First, lock the tables
-  my @locks = (
-               "_sys_changelog",
-               "_sys_changerec_col",
-	       "_sys_changerec_row",
-	       "credentials",
-	       "groups",
-	       "memberships",
-	       "protections",
-	       "users",
-	       $table,
-	      );
-
-  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
-  if ($xres == 1){
-    $xref = shift @{$xref};
-  }else{
-    return ($xres, $xref);
-  }
-  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
-
-  unless($lockres == 1){
-    CMU::Netdb::xaction_rollback($dbh);
-    return ($errcodes{"EDB"}, $lockref);
+  $query = "LOCK TABLES protections as P WRITE, protections WRITE,
+users as U READ, credentials AS C READ, credentials READ, users READ,
+groups as G READ, groups READ, memberships as M READ, $table as T READ,
+memberships READ, _sys_changelog WRITE,
+_sys_changerec_row WRITE, _sys_changerec_col WRITE";
+  $query .= ", $table READ" if (($table ne "users") && ($table ne "groups") &&
+				($table ne "credentials"));
+  warn __FILE__, ':', __LINE__, ' :>'.
+    "CMU::Netdb::auth::add_group_to_protections: $query\n" if ($debug >= 2);
+  if (! $dbh->do($query)) {
+    warn __FILE__, ':', __LINE__, ' :>'.
+      "CMU::Netdb::auth::add_group_to_protections: Failed to lock tables\n$DBI::errstr\n" if ($debug);
+    return ($errcodes{"ERROR"}, ['db_lock']);
   }
 
   {
@@ -1314,7 +1262,7 @@ sub add_group_to_protections {
     }
     my $al = auth_prot_op($dbh, $dbuser, $table, $row, $rlevel, 'ADD', $group, $caller);
     if ($al < 1) {
-      CMU::Netdb::xaction_rollback($dbh);
+      $dbh->do("UNLOCK TABLES");
       return ($al, ['auth']);
     }
   }
@@ -1329,7 +1277,7 @@ sub add_group_to_protections {
       warn __FILE__, ':', __LINE__, ' :>'.
 	"CMU::Netdb::auth::add_group_to_protections: ".
 	  "No such row ($row) in $table\n";
-      CMU::Netdb::xaction_rollback($dbh);
+      $dbh->do("UNLOCK TABLES");
       return ($errcodes{"EINVALID"}, ["$table.id", 'row', 'no_such_row']);
     }
   }
@@ -1337,14 +1285,14 @@ sub add_group_to_protections {
   if ($group eq 'system:anyuser') {
     $query = <<END_SELECT;
 INSERT INTO protections (identity, tname, tid, rights, rlevel) 
-VALUES (0, '$table', $row, '$rights', '$rlevel')
+VALUES (0, "$table", $row, "$rights", "$rlevel")
 END_SELECT
   }else{
     $query = <<END_SELECT;
 INSERT INTO protections (identity, tname, tid, rights, rlevel) 
-SELECT CAST(G.id AS SIGNED INT) * -1, '$table', $row, '$rights', '$rlevel'
+SELECT CAST(G.id AS SIGNED INT) * -1, "$table", $row, "$rights", "$rlevel"
 FROM groups as G
-WHERE G.name = '$group'
+WHERE G.name = "$group"
 END_SELECT
   }
   warn __FILE__, ':', __LINE__, ' :>'.
@@ -1353,7 +1301,7 @@ END_SELECT
 
 
   if ($result == 1) {
-    my $rowid = $dbh->last_insert_id(undef, undef, 'protections', undef);
+    my $rowid = $dbh->{'mysql_insertid'};
     # since we just inserted a db row directly, we have to do logging here
     # first create the changelog entry
     my $log = CMU::Netdb::primitives::changelog_id($dbh, $dbuser);
@@ -1380,7 +1328,7 @@ END_SELECT
     # Our caller may need the original insert id, but we can't reset
     # it, so we invent a new place to put it
     $CMU::Netdb::primitives::db_insertid = $rowid;
-    CMU::Netdb::xaction_commit($dbh, $xref);
+    $dbh->do("UNLOCK TABLES");
     return ($result, ['unknown']);
   }
   
@@ -1394,7 +1342,7 @@ END_SELECT
   if ($#$rows == -1) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::add_group_to_protections: No such group\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{"EGROUP"}, ['group']);
   }
   
@@ -1403,9 +1351,9 @@ END_SELECT
   $query = <<END_SELECT;
 SELECT P.rights
 FROM protections as P, groups as G
-WHERE G.name = '$group'
+WHERE G.name = "$group"
 AND P.identity = CAST(G.id AS SIGNED INT) * -1
-AND P.tname = '$table'
+AND P.tname = "$table"
 AND P.tid = '$row'
 AND P.rlevel = '$rlevel'
 END_SELECT
@@ -1417,12 +1365,12 @@ END_SELECT
   if ($sth->rows() == 1) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::add_group_to_protections: A protection entry already existed\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{"EEXISTS"}, ['row']);
   }
   
   # Unknown error
-  CMU::Netdb::xaction_rollback($dbh);
+  $dbh->do("UNLOCK TABLES");
   return ($errcodes{"ERROR"}, ['unknown']);
   
 }
@@ -1706,34 +1654,22 @@ sub modify_user_protection {
     return $errcodes{"EINVALID"};
   }
   
-  my @locks = (
-	       "_sys_changelog",
-	       "_sys_changerec_col",
-	       "_sys_changerec_row",
-	       "credentials",
-	       "groups",
-	       "memberships",
-	       "protections",
-	       "users",
-	      );
-
-  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
-  if ($xres == 1){
-    $xref = shift @{$xref};
-  }else{
-    return ($xres, $xref);
-  }
-  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
-
-  unless($lockres == 1){
-    CMU::Netdb::xaction_rollback($dbh);
-    return ($errcodes{"EDB"}, $lockref);
+  $query = "LOCK TABLES protections WRITE, users READ, users AS U READ,
+memberships READ, credentials AS C READ, credentials READ, groups READ,
+groups as G READ, protections as P READ, memberships AS M READ, 
+_sys_changelog WRITE, _sys_changerec_row WRITE, _sys_changerec_col WRITE";
+  warn __FILE__, ':', __LINE__, ' :>'.
+    "CMU::Netdb::auth::modify_user_protection: $query\n" if ($debug >= 2);
+  if (! $dbh->do($query)) {
+    warn __FILE__, ':', __LINE__, ' :>'.
+      "CMU::Netdb::auth::modify_user_protection: Failed to lock tables\n$DBI::errstr\n" if ($debug);
+    return $errcodes{"ERROR"};
   }
   
   {
     my $al = auth_prot_op($dbh, $dbuser, $table, $row, $rlevel, 'WRITE', $user, '');
     if ($al < 1) {
-      CMU::Netdb::xaction_rollback($dbh);
+      $dbh->do("UNLOCK TABLES");
       return $al;
     }
   }
@@ -1741,8 +1677,8 @@ sub modify_user_protection {
   $query = <<END_SELECT;
 SELECT C.user, protections.id 
 FROM credentials AS C LEFT JOIN protections ON protections.identity = C.user
-WHERE C.authid = '$user'
-AND (((protections.tname = '$table')
+WHERE C.authid = "$user"
+AND (((protections.tname = "$table")
       AND
       (protections.tid = '$row') AND (protections.rlevel = '$rlevel'))
      OR ISNULL(protections.tname))
@@ -1754,14 +1690,14 @@ END_SELECT
   if (!$result) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::modify_user_protection: Unknown error\n$DBI::errstr\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return $errcodes{"ERROR"};
   }
   
   if ($sth->rows() != 1) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::modify_user_protection: No such user\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return $errcodes{"EUSER"};
   }
   
@@ -1769,7 +1705,7 @@ END_SELECT
   if (!$row[1]) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::modify_user_protection: No such protection entry\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return $errcodes{"ENOENT"};
   }
   $id = $row[1];
@@ -1780,11 +1716,12 @@ END_SELECT
     # Now create the changelog row record
       my $rowrec = CMU::Netdb::primitives::changelog_row($dbh, $log, 'protections', $id, 'UPDATE');
       if ($rowrec) {
+      my $rowrec = $dbh->{'mysql_insertid'};
       # Now create the column entry (only changing one column)
       CMU::Netdb::primitives::changelog_col($dbh, $rowrec, 'rights', $rights, ['rights', 'protections', "protections.id = '$id'"]);
     }
   }
-  $query = "UPDATE protections SET rights='$rights' WHERE id='$id'";
+  $query = "UPDATE protections SET rights=\"$rights\" WHERE id='$id'";
   warn __FILE__, ':', __LINE__, ' :>'.
     "CMU::Netdb::auth::modify_user_protection: $query\n" if ($debug >= 2);
   $result = $dbh->do($query);
@@ -1792,10 +1729,10 @@ END_SELECT
   if (!$result) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::modify_user_protection: Unknown error\n$DBI::errstr\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return $errcodes{"ERROR"};
   }
-  CMU::Netdb::xaction_commit($dbh, $xref);
+  $dbh->do("UNLOCK TABLES");
   return 1;
   
 }
@@ -1842,34 +1779,22 @@ sub modify_group_protection {
     return $errcodes{"EINVALID"};
   }
 
-  my @locks = (
-	       "_sys_changelog",
-	       "_sys_changerec_col",
-	       "_sys_changerec_row",
-	       "credentials",
-	       "groups",
-	       "memberships",
-	       "protections",
-	       "users",
-	      );
-
-  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
-  if ($xres == 1){
-    $xref = shift @{$xref};
-  }else{
-    return ($xres, $xref);
-  }
-  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
-
-  unless($lockres == 1){
-    CMU::Netdb::xaction_rollback($dbh);
-    return ($errcodes{"EDB"}, $lockref);
+  $query = "LOCK TABLES protections WRITE, groups READ, groups as G READ,
+users READ, credentials AS C READ, credentials READ, memberships as M READ,
+users as U READ, protections as P READ, memberships READ, _sys_changelog WRITE,
+_sys_changerec_row WRITE,_sys_changerec_col WRITE";
+  warn __FILE__, ':', __LINE__, ' :>'.
+    "CMU::Netdb::auth::modify_group_protection: $query\n" if ($debug >= 2);
+  if (! $dbh->do($query)) {
+    warn __FILE__, ':', __LINE__, ' :>'.
+      "CMU::Netdb::auth::modify_group_protection: Failed to lock tables\n$DBI::errstr\n" if ($debug);
+    return $errcodes{"ERROR"};
   }
   
   {
     my $al = auth_prot_op($dbh, $dbuser, $table, $row, $rlevel, 'WRITE', $group, '');
     if ($al < 1) {
-      CMU::Netdb::xaction_rollback($dbh);
+      $dbh->do("UNLOCK TABLES");
       return $al;
     }
   }
@@ -1879,7 +1804,7 @@ sub modify_group_protection {
 SELECT 0, protections.id 
 FROM protections
 WHERE protections.identity = 0
-AND (((protections.tname = '$table')
+AND (((protections.tname = "$table")
       AND
       (protections.tid = '$row') AND protections.rlevel = '$rlevel')
      OR ISNULL(protections.tname))
@@ -1902,14 +1827,14 @@ END_SELECT
   if (!$result) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::modify_group_protection: Unknown error\n$DBI::errstr\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return $errcodes{"ERROR"};
   }
   
   if ($sth->rows() != 1) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::modify_group_protection: No such group\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return $errcodes{"EGROUP"};
   }
   
@@ -1917,7 +1842,7 @@ END_SELECT
   if (!$row[1]) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::modify_group_protection: No such protection entry\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return $errcodes{"ENOENT"};
   }
   $id = $row[1];
@@ -1933,7 +1858,7 @@ END_SELECT
     }
   }
 
-  $query = "UPDATE protections SET rights='$rights' WHERE id='$id'";
+  $query = "UPDATE protections SET rights=\"$rights\" WHERE id='$id'";
   warn __FILE__, ':', __LINE__, ' :>'.
     "CMU::Netdb::auth::modify_group_protection: $query\n" if ($debug >= 2);
   $result = $dbh->do($query);
@@ -1941,11 +1866,11 @@ END_SELECT
   if (!$result) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::modify_group_protection: Unknown error\n$DBI::errstr\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return $errcodes{"ERROR"};
   }
   
-  CMU::Netdb::xaction_commit($dbh, $xref);
+  $dbh->do("UNLOCK TABLES");
   return 1;
   
 }
@@ -1976,39 +1901,24 @@ sub delete_user_from_group {
   return (CMU::Netdb::getError($user), ['groups.id']) if (CMU::Netdb::getError($gid) != 1);
 
   # First, lock the tables
-  my @locks = (
-	       "_sys_changelog",
-	       "_sys_changerec_col",
-	       "_sys_changerec_row",
-	       "credentials",
-	       "groups",
-	       "memberships",
-	       "protections",
-	       "users",
-	      );
-
-  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
-  if ($xres == 1){
-    $xref = shift @{$xref};
-  }else{
-    return ($xres, $xref);
-  }
-  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
-
-  unless($lockres == 1){
-    CMU::Netdb::xaction_rollback($dbh);
-    return ($errcodes{"EDB"}, $lockref);
+  if (! $dbh->do("LOCK TABLES memberships WRITE, users READ, groups AS G READ, 
+credentials AS C READ, credentials READ,
+protections as P READ, users as U READ, memberships as M READ, _sys_changelog WRITE, 
+_sys_changerec_row WRITE,_sys_changerec_col WRITE")) {
+    warn __FILE__, ':', __LINE__, ' :>'.
+      "CMU::Netdb::delete_user_from_group: Failed to lock tables\n$DBI::errstr\n" if ($debug);
+    return ($errcodes{"ERROR"}, ['db_lock'])
   }
 
   # Get the uid
   $rows = CMU::Netdb::primitives::list
     ($dbh, $dbuser, "credentials",
-     \@credentials_fields, "credentials.authid = '$user'");
+     \@credentials_fields, "credentials.authid = \"$user\"");
   return ($rows, ['credentials.authid']) if (!ref $rows);
   if ($#$rows == -1) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::delete_user_from_group: No such user\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{"EUSER"}, ['credentials.authid']);
   }
 
@@ -2018,7 +1928,7 @@ sub delete_user_from_group {
   my $ul = CMU::Netdb::get_write_level($dbh, $dbuser, 'groups', $gid);
 
   if ($ul < 5) {
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{EPERM}, ['permissions']);
   }
 
@@ -2037,6 +1947,7 @@ sub delete_user_from_group {
     # first create the changelog entry
     my $log = CMU::Netdb::primitives::changelog_id($dbh, $dbuser);
     if ($log) {
+      my $log = $dbh->{'mysql_insertid'};
       # Now create the changelog row record
       my $rowrec = CMU::Netdb::primitives::changelog_row
 	($dbh, $log, 'memberships', $delid, 'DELETE');
@@ -2050,7 +1961,7 @@ sub delete_user_from_group {
 	}
       }
     }
-    CMU::Netdb::xaction_commit($dbh, $xref);
+    $dbh->do("UNLOCK TABLES");
     return (1, {});
   }
   
@@ -2066,13 +1977,13 @@ sub delete_user_from_group {
   if ($sth->rows() == 0) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::delete_user_from_group: $user is already not a member of group\n";
-    CMU::Netdb::xaction_commit($dbh, $xref);
+    $dbh->do("UNLOCK TABLES");
     return (1, {});
   }
   
   # Unknown error
   
-  CMU::Netdb::xaction_rollback($dbh);
+  $dbh->do("UNLOCK TABLES");
   return ($errcodes{"ERROR"}, ['unknown']);
 }
 
@@ -2248,32 +2159,10 @@ sub delete_user_from_protections {
     return ($errcodes{"EINVALID"}, ['tname']);
   }
 
-  # First, lock the tables
-  my @locks = (
-	       "_sys_changelog",
-	       "_sys_changerec_col",
-	       "_sys_changerec_row",
-	       "credentials",
-	       "protections",
-	       "users",
-	      );
-
-  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
-  if ($xres == 1){
-    $xref = shift @{$xref};
-  }else{
-    return ($xres, $xref);
-  }
-  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
-  unless($lockres == 1){
-    CMU::Netdb::xaction_rollback($dbh);
-    return ($errcodes{"EDB"}, $lockref);
-  }
-
   $query = <<END_SELECT;
 SELECT C.user
 FROM credentials AS C
-WHERE C.authid = '$user'
+WHERE C.authid = "$user"
 END_SELECT
 
   warn __FILE__, ':', __LINE__, ' :>'.
@@ -2284,14 +2173,14 @@ END_SELECT
   if (!$result) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::delete_user_from_protections: Unknown error\n$DBI::errstr\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{"ERROR"}, ['unknown']);
   }
 
   if ($sth->rows() != 1) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::delete_user_from_protections: No such user\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{"EUSER"}, ['user']);
   }
 
@@ -2313,26 +2202,33 @@ END_SELECT
       }
     }
     my $al = auth_prot_op($dbh, $dbuser, $table, $row, $rlevel, 'WRITE', $user, $caller);
-    if ($al < 1){
-      CMU::Netdb::xaction_rollback($dbh);
-      return ($al, ['auth']);
-    }
+    return ($al, ['auth']) if ($al < 1);
   }
  DUFP_AUTH:
+
+  # First, lock the tables
+  $query = "LOCK TABLES protections WRITE, users READ, users as U READ, _sys_changelog WRITE,
+credentials AS C READ, credentials READ,
+_sys_changerec_row WRITE,_sys_changerec_col WRITE";
+  if (! $dbh->do($query)) {
+    warn __FILE__, ':', __LINE__, ' :>'.
+      "CMU::Netdb::auth::delete_user_from_protections: Failed to lock tables\n$DBI::errstr\n" if ($debug);
+    return ($errcodes{"ERROR"}, ['lock']);
+  }
 
   # prefetch the row id and rights for logging
   my $delident = $result->[0];
 
-  my ($delid, $delrights, $delver) = $dbh->selectrow_array("SELECT id,rights,version FROM protections WHERE identity='$delident' AND tname='$table' AND tid = '$row' AND rlevel='$rlevel'");
+  my ($delid, $delrights, $delver) = $dbh->selectrow_array("SELECT id,rights,version FROM protections WHERE identity='$delident' AND tname=\"$table\" AND tid = \"$row\" AND rlevel=\"$rlevel\"");
 
   # If no rows match that query, just pretend that all is right with the world.
   if (!$delid) {
-    CMU::Netdb::xaction_commit($dbh, $xref);
+    $dbh->do("UNLOCK TABLES");
     return (1, {});
   }
 
   # delete the row
-  $query = "DELETE FROM protections WHERE identity='$delident' AND tname='$table' AND tid = '$row' AND rlevel='$rlevel'";
+  $query = "DELETE FROM protections WHERE identity='$delident' AND tname=\"$table\" AND tid = \"$row\" AND rlevel=\"$rlevel\"";
 
   warn __FILE__, ':', __LINE__, ' :>'.
     "CMU::Netdb::auth::delete_user_from_protections: $query\n" if ($debug >= 2);
@@ -2342,10 +2238,11 @@ END_SELECT
   if (!$result) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::delete_user_from_protections: Unknown error\n$DBI::errstr\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{"ERROR"}, ['unknown']);
   }
 
+  $dbh->do("UNLOCK TABLES");
   # We just made a change directly, log it.
   # first create the changelog entry
   my $log = CMU::Netdb::primitives::changelog_id($dbh, $dbuser);
@@ -2365,7 +2262,6 @@ END_SELECT
       }
     }
   }
-  CMU::Netdb::xaction_commit($dbh, $xref);
   return (1, {});
 }
 
@@ -2397,41 +2293,28 @@ sub delete_protection_tid {
   }
   
   # First, lock the tables
-  my @locks = (
-	       "_sys_changelog",
-	       "_sys_changerec_col",
-	       "_sys_changerec_row",
-	       "credentials",
-	       "groups",
-	       "memberships",
-	       "protections",
-	       "users",
-	      );
-
-  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
-  if ($xres == 1){
-    $xref = shift @{$xref};
-  }else{
-    return ($xres, $xref);
-  }
-  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
-  unless($lockres == 1){
-    CMU::Netdb::xaction_rollback($dbh);
-    return ($errcodes{"EDB"}, $lockref);
+  $query = "LOCK TABLES protections WRITE, memberships READ, groups as G READ, users READ,
+credentials AS C READ, credentials READ,
+users as U READ, memberships as M READ, protections as P READ, _sys_changelog WRITE, 
+_sys_changerec_row WRITE,_sys_changerec_col WRITE";
+  if (! $dbh->do($query)) {
+    warn __FILE__, ':', __LINE__, ' :>'.
+      "CMU::Netdb::auth::delete_protection_tid: Failed to lock tables\n$DBI::errstr\n" if ($debug);
+    return ($errcodes{"ERROR"}, ['lock']);
   }
   
   {
     my $al = CMU::Netdb::get_write_level($dbh, $dbuser, $table, $tid);
     if ($al < 1) {
-      CMU::Netdb::xaction_rollback($dbh);
+      $dbh->do("UNLOCK TABLES");
       return $al;
     }
   }
   
   # prefetch the row data for logging
-  my $delrows = $dbh->selectall_arrayref("SELECT id,identity,rights,rlevel,version FROM protections WHERE tname='$table' AND tid = '$tid'"); 
+  my $delrows = $dbh->selectall_arrayref("SELECT id,identity,rights,rlevel,version FROM protections WHERE tname=\"$table\" AND tid = \"$tid\""); 
   # delete the row
-  $query = "DELETE FROM protections WHERE tname='$table' AND tid = '$tid'";
+  $query = "DELETE FROM protections WHERE tname=\"$table\" AND tid = \"$tid\"";
   
   warn __FILE__, ':', __LINE__, ' :>'.
     "CMU::Netdb::auth::delete_protection_tid: $query\n" if ($debug >= 2);
@@ -2441,7 +2324,7 @@ sub delete_protection_tid {
   if (!$result) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::delete_protection_tid: Unknown error\n$DBI::errstr\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{"ERROR"}, ['unknown']);
   }
   # We just made a change directly, log it.
@@ -2467,7 +2350,7 @@ sub delete_protection_tid {
     }
   }
 
-  CMU::Netdb::xaction_commit($dbh, $xref);
+  $dbh->do("UNLOCK TABLES");
   return 1;
 }
 
@@ -2497,27 +2380,14 @@ sub delete_group_from_protections {
   }
 
   # First, lock the tables
-  my @locks = (
-	       "_sys_changelog",
-	       "_sys_changerec_col",
-	       "_sys_changerec_row",
-	       "credentials",
-	       "groups",
-	       "memberships",
-	       "protections",
-	       "users",
-	      );
-
-  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
-  if ($xres == 1){
-    $xref = shift @{$xref};
-  }else{
-    return ($xres, $xref);
-  }
-  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
-  unless($lockres == 1){
-    CMU::Netdb::xaction_rollback($dbh);
-    return ($errcodes{"EDB"}, $lockref);
+  $query = "LOCK TABLES protections WRITE, groups READ, users READ, memberships READ,
+credentials AS C READ, credentials READ,
+users as U READ, memberships as M READ, protections as P READ, groups as G READ, _sys_changelog WRITE,
+_sys_changerec_row WRITE,_sys_changerec_col WRITE";
+  if (! $dbh->do($query)) {
+    warn __FILE__, ':', __LINE__, ' :>'.
+      "CMU::Netdb::auth::delete_group_from_protections: Failed to lock tables\n$DBI::errstr\n" if ($debug);
+    return ($errcodes{"ERROR"}, ['lock']);
   }
 
   if ($group eq 'system:anyuser') {
@@ -2526,7 +2396,7 @@ sub delete_group_from_protections {
     $query = <<END_SELECT;
 SELECT groups.id 
 FROM groups 
-WHERE groups.name = '$group'
+WHERE groups.name = "$group"
 END_SELECT
 
     warn __FILE__, ':', __LINE__, ' :>'.
@@ -2537,14 +2407,14 @@ END_SELECT
     if (!$result) {
       warn __FILE__, ':', __LINE__, ' :>'.
 	"CMU::Netdb::auth::delete_group_from_protections: Unknown error\n$DBI::errstr\n" if ($debug);
-      CMU::Netdb::xaction_rollback($dbh);
+      $dbh->do("UNLOCK TABLES");
       return ($errcodes{"ERROR"}, ['groups.name']);
     }
 
     if ($sth->rows() != 1) {
       warn __FILE__, ':', __LINE__, ' :>'.
 	"CMU::Netdb::auth::delete_group_from_protections: No such group\n" if ($debug);
-      CMU::Netdb::xaction_rollback($dbh);
+      $dbh->do("UNLOCK TABLES");
       return ($errcodes{"EGROUP"}, ['groups.name']);
     }
 
@@ -2568,7 +2438,7 @@ END_SELECT
 
     my $al = auth_prot_op($dbh, $dbuser, $table, $row, $rlevel, 'WRITE', $group, $caller);
     if ($al < 1) {
-      CMU::Netdb::xaction_rollback($dbh);
+      $dbh->do("UNLOCK TABLES");
       return ($al, ['auth2']);
     }
   }
@@ -2578,12 +2448,12 @@ END_SELECT
   # prefetch the row id and rights for logging
   my ($delid, $delrights, $delver) = $dbh->selectrow_array
     ("SELECT id,rights,version FROM protections ".
-     "WHERE identity='$identity' AND tname='$table' AND ".
-     "tid = '$row' AND rlevel = '$rlevel'");
+     "WHERE identity='$identity' AND tname=\"$table\" AND ".
+     "tid = \"$row\" AND rlevel = \"$rlevel\"");
 
   # delete the row
   $query = "DELETE FROM protections WHERE identity='$identity' AND ".
-    "tname='$table' AND tid = '$row' AND rlevel = '$rlevel'";
+    "tname=\"$table\" AND tid = \"$row\" AND rlevel = \"$rlevel\"";
 
   warn __FILE__, ':', __LINE__, ' :>'.
     "CMU::Netdb::auth::delete_group_from_protections: $query\n"
@@ -2595,7 +2465,7 @@ END_SELECT
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::auth::delete_group_from_protections: Unknown error\n".
 	"$DBI::errstr\n" if ($debug);
-    CMU::Netdb::xaction_rollback($dbh);
+    $dbh->do("UNLOCK TABLES");
     return ($errcodes{"ERROR"}, ['unknown']);
   }
 
@@ -2622,7 +2492,7 @@ END_SELECT
     }
   }
 
-  CMU::Netdb::xaction_commit($dbh, $xref);
+  $dbh->do("UNLOCK TABLES");
   return (1, {});
 }
 
@@ -2808,8 +2678,7 @@ sub get_user_group_admin_status {
   return $usergroupadmStatus if ($usergroupadm eq $user);
 
   $query =<<END_SELECT;
-SELECT P.tid FROM credentials AS C
-CROSS JOIN protections as P
+SELECT P.tid FROM (credentials AS C, protections as P) 
 LEFT JOIN memberships AS M ON (M.uid = C.user AND P.identity = CAST(M.gid AS SIGNED INT) * -1)
 WHERE C.authid = '$user'
   AND P.tname = 'groups'
@@ -3020,12 +2889,6 @@ sub apply_prot_profile {
 
   my $LastErrfields;
   my ($Success, $Failure) = (0,0);
-  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
-  if ($xres == 1){
-    $xref = shift @{$xref};
-  }else{
-    return ($xres, $xref);
-  }
   foreach my $PEntry (@{$Profiles->{$profile}->{entries}}) {
     # Substitute values from parms
     # Should be able to do this with a map {} but something's not
@@ -3053,13 +2916,10 @@ sub apply_prot_profile {
   }
 
   if ($Success && $Failure) {
-    CMU::Netdb::xaction_rollback($dbh);
     return (2, $LastErrfields);
   }elsif($Success) {
-    CMU::Netdb::xaction_commit($dbh, $xref);
     return (1, []);
   }
-  CMU::Netdb::xaction_rollback($dbh);
   return (-1, $LastErrfields);
 }
 
