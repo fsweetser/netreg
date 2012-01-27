@@ -106,7 +106,7 @@ require Exporter;
              where   identity < 0  
                      AND tname='machine' 
                      AND groups.name LIKE 'dept:%' 
-                     AND abbreviation != 'wireless' AND abbreviation != 'ADSL'
+                     AND abbreviation <> 'wireless' AND abbreviation <> 'ADSL'
                      AND identity*-1 = groups.id 
                      AND tid=machine.id 
                      AND machine.ip_address_subnet = subnet.id
