@@ -76,7 +76,7 @@ sub dns_main {
   $sort = 'dns_resource_type.name' if ($sort eq '');
   
   my $res = dns_r_t_print_type($user, $dbh, $q,  
-			       " 1 ".CMU::Netdb::verify_orderby($sort), '',
+			       " TRUE ".CMU::Netdb::verify_orderby($sort), '',
 			       $ENV{SCRIPT_NAME}, "sort=$sort", 'start', 'dns_r_t_list');
   
   print "ERROR: ".$errmeanings{$res} if ($res <= 0);
@@ -116,7 +116,7 @@ sub dns_r_t_list {
   $sort = 'dns_resource_type.name' if ($sort eq '');
   
   $res = dns_r_t_print_type($user, $dbh, $q,  
-			     " 1 ".CMU::Netdb::verify_orderby($sort), '',
+			     " TRUE ".CMU::Netdb::verify_orderby($sort), '',
 			     $ENV{SCRIPT_NAME}, "sort=$sort", 'start', 'dns_r_t_list');
   
   print "ERROR: ".$errmeanings{$res} if ($res <= 0);

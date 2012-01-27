@@ -359,7 +359,7 @@ sub svc_print_service {
 
   print &CMU::WebInt::pager_Top($start, $$ctRow[0], $defitems, $maxPages,
 				$url, $oData, $skey);
-  $where = "1" if ($where eq '');
+  $where = "TRUE" if ($where eq '');
   $ruRef = CMU::Netdb::list_services($dbh, $user, " $where ORDER BY service.type, service.name ".
 				     CMU::Netdb::verify_limit($start, $defitems));
   if (!ref $ruRef) {
@@ -528,7 +528,7 @@ sub svc_type_list {
 #			       '', '');
 
   $res = svc_type_print($user, $dbh, $q,  
-			" 1 ", '',
+			" TRUE ", '',
 			$ENV{SCRIPT_NAME}, "", 'start', 'svc_type_list');
   
   print "ERROR: ".$errmeanings{$res} if ($res <= 0);
@@ -558,7 +558,7 @@ sub svc_type_print {
   $lmach .= "&$oData" if ($oData ne '');
   print &CMU::WebInt::pager_Top($start, $$ctRow[0], $defitems, $maxPages,
 		   $url, "op=".$lmach, $skey);
-  $where = "1" if ($where eq '');
+  $where = "TRUE" if ($where eq '');
   $ruRef = CMU::Netdb::list_service_types($dbh, $user, " $where ORDER BY service_type.name ".
 					  CMU::Netdb::verify_limit($start, $defitems));
   if (!ref $ruRef) {
@@ -2528,7 +2528,7 @@ sub attr_spec_print {
   $lmach .= "&$oData" if ($oData ne '');
   print &CMU::WebInt::pager_Top($start, $$ctRow[0], $defitems, $maxPages,
 		   $url, "op=".$lmach, $skey);
-  $where = "1" if ($where eq '');
+  $where = "TRUE" if ($where eq '');
   $ruRef = CMU::Netdb::list_attribute_spec
     ($dbh, $user, " $where ".CMU::Netdb::verify_limit($start, $defitems));
   if (!ref $ruRef) {

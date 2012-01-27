@@ -114,7 +114,7 @@ sub sch_main {
   $sort = 'id' if ($sort eq '');
 
   $res = sch_print_scheduled($user, $dbh, $q,  
-			     " 1 ".
+			     " TRUE ".
 			     CMU::Netdb::verify_orderby($sort), '',
 			     $ENV{SCRIPT_NAME}, "sort=$sort", 'start', 'sch_main');
   

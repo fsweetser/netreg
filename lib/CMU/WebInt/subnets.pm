@@ -284,7 +284,7 @@ sub subnets_print_subnet {
 
   print &CMU::WebInt::pager_Top($start, $$ctRow[0], $defitems, $maxPages,
 		   $url, $oData, $skey);
-  $where = "1" if ($where eq '');
+  $where = "TRUE" if ($where eq '');
   $ruRef = CMU::Netdb::list_subnets($dbh, $user, " $where ".
 				    CMU::Netdb::verify_limit($start, $defitems));
   if (!ref $ruRef) {
@@ -1580,7 +1580,7 @@ sub subnets_print_shares {
 
   print &CMU::WebInt::pager_Top($start, $$ctRow[0], $defitems, $maxPages,
 		   $url, $oData, $skey);
-  $where = "1" if ($where eq '');
+  $where = "TRUE" if ($where eq '');
   $ruRef = CMU::Netdb::list_subnet_shares($dbh, $user, " $where ".
 					  CMU::Netdb::verify_limit($start, $defitems));
   if (!ref $ruRef) {

@@ -2175,7 +2175,7 @@ sub mach_print_expire_machines {
   ($vres, $defitems) = CMU::Netdb::config::get_multi_conf_var
     ('webint', 'MACHINES_PER_PAGE');
 
-  $where = "1" if ($where eq '');
+  $where = "TRUE" if ($where eq '');
   if ($td eq '0') {
     $ruRef = CMU::Netdb::list_machines($dbh, $user, " $where ".
 				       CMU::Netdb::verify_limit($start, $defitems));
@@ -2341,7 +2341,7 @@ sub mach_list {
   warn __FILE__, ':', __LINE__, ' :>'.
     "GWHERE: $gwhere; GRP: $grp\n" if ($debug >= 1);
   $res = mach_print_machines($user, $dbh, $q, $gwhere, $grp,
-			     " 1 ".
+			     " TRUE ".
 			     CMU::Netdb::verify_orderby($sort),
 			     $url, "sort=$sort&osort=$osort&grp=$presentID", 'start', 'mach_list');
   
@@ -2354,7 +2354,7 @@ sub mach_list {
 			      "[<b><a href=$url?op=outlets_search>Search Your Activated Outlets</a></b>] ".
 			      "[<b><a href=\"$url?op=outlets_expire_list\">View Expiring Outlets</a></b>]");
     $res = CMU::WebInt::outlets::outlets_print_outlet
-      ($user, $dbh, $q, $gwhere, $grp, " 1 ".
+      ($user, $dbh, $q, $gwhere, $grp, " TRUE ".
        CMU::Netdb::verify_orderby($osort), '',
        $url, "sort=$sort&osort=$osort&grp=$presentID", 'ostart', 'mach_list');
     
@@ -2389,7 +2389,7 @@ sub mach_print_machines {
   ($vres, $defitems) = CMU::Netdb::config::get_multi_conf_var
     ('webint', 'MACHINES_PER_PAGE');
 
-  $where = "1" if ($where eq '');
+  $where = "TRUE" if ($where eq '');
   if ($td eq '0') {
     $ruRef = CMU::Netdb::list_machines($dbh, $user, 
 				       " $where ".
@@ -2981,7 +2981,7 @@ sub mach_s_exec {
   ## WARNING: don't change this to OR unless you deal with the user/group
   ## join stuff that MUST be AND
   my $gwhere = join(' AND ', @q);
-  $gwhere = '1' if ($gwhere eq '');
+  $gwhere = 'TRUE' if ($gwhere eq '');
 
   my $sort = CMU::WebInt::helper::gParam($q, 'sort');
   $sort = 'machine.host_name' if ($sort eq '');
@@ -3058,7 +3058,7 @@ sub mach_print_mach_search {
     if (!ref $sref);
 
   if ($#$ruRef == 0) {
-    if ($prewhere ne ' 1 ') {
+    if ($prewhere ne ' TRUE ') {
       return (0, 
 	      $CMU::Netdb::errors::errcodes{ENOTFOUND}, 
 	      "No results found. Due to user/group specification, we ".
@@ -3124,7 +3124,7 @@ sub mach_search_pre_where {
 	"protections.tid = machine.id AND protections.tname = 'machine'";
   }else{
     # If this is changed, change the reference above for counts
-    return ' 1 ';
+    return ' TRUE ';
   }
 
   $sth = $dbh->prepare($query);

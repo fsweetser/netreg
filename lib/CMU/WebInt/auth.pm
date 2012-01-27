@@ -80,7 +80,7 @@ sub auth_user_list {
 
   print CMU::WebInt::smallRight(CMU::WebInt::pageHelpLink(''));
   print "<font color=red>Error executing auth_Print_Users.</font><br>\n"
-    if (&CMU::WebInt::auth_Print_Users($user, $dbh, $q, " 1 ".
+    if (&CMU::WebInt::auth_Print_Users($user, $dbh, $q, " TRUE ".
 				       CMU::Netdb::verify_orderby($smap{$sort}),
 				       $ENV{SCRIPT_NAME}, 
 				       "op=auth_user_list&sort=$sort", 
@@ -518,7 +518,7 @@ sub auth_groupinfo {
   if ($rl >= 5) {
     print &CMU::WebInt::subHeading("Group Members", CMU::WebInt::pageHelpLink(''));
     $rGmem = CMU::Netdb::list_members_of_group($dbh, $user, $g, 
-					       ' 1 ORDER BY credentials.authid');
+					       ' TRUE ORDER BY credentials.authid');
     my %lmgPos = %{CMU::Netdb::makemap($rGmem->[0])};
     if (!ref $rGmem) {
       print "error in list_members_of_group: ".$errmeanings{$rGmem}."<br>\n";

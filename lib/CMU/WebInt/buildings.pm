@@ -95,7 +95,7 @@ sub build_list {
   $sort = 'building.name' if ($sort eq '');
   
   $res = build_print_building($user, $dbh, $q,  
-			      " 1 ".
+			      " TRUE ".
                               CMU::Netdb::verify_orderby($sort), '',
 			      $ENV{SCRIPT_NAME}, "sort=$sort", 'start', 'build_list');
   

@@ -91,7 +91,7 @@ CMU::WebInt::pageHelpLink(''));
   $sort = 'dhcp_option_type.name' if ($sort eq '');
   
   $res = dhcp_o_t_print_type($user, $dbh, $q,  
-			     " 1 ".CMU::Netdb::verify_orderby($sort), '',
+			     " TRUE ".CMU::Netdb::verify_orderby($sort), '',
 			     $ENV{SCRIPT_NAME}, "sort=$sort", 'start', 'dhcp_o_t_list');
   
   print "ERROR: ".$errmeanings{$res} if ($res <= 0);
