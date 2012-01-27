@@ -399,7 +399,7 @@ sub list_machines_munged_protections {
 	}
       }
 
-      $query = "SELECT STRAIGHT_JOIN DISTINCT ".join(', ', @CMU::Netdb::structure::machine_fields)."\n"."
+      $query = "SELECT DISTINCT ".join(', ', @CMU::Netdb::structure::machine_fields)."\n"."
 FROM protections as P, machine
 WHERE P.identity = $in
  AND P.tname = 'machine'
@@ -419,7 +419,7 @@ WHERE P.identity = $in
       $in = CMU::Netdb::valid('credentials.authid', $in, $dbuser, 0, $dbh);
       return CMU::Netdb::getError($in) if (CMU::Netdb::getError($in) != 1);
 
-      $query = "SELECT STRAIGHT_JOIN DISTINCT ".join(', ', @CMU::Netdb::structure::machine_fields)."\n"."
+      $query = "SELECT DISTINCT ".join(', ', @CMU::Netdb::structure::machine_fields)."\n"."
 FROM credentials AS C, protections as P, machine
 WHERE C.authid = '$in'
  AND P.tname = 'machine'
@@ -447,7 +447,7 @@ WHERE C.authid = '$in'
       if (CMU::Netdb::can_read_all($dbh, $dbuser, 'machine', "(P.identity = '$in')", '')) {
         $query = "SELECT ".join(', ', @CMU::Netdb::structure::machine_fields)." FROM machine WHERE 1\n";
       } else {
-        $query = "SELECT STRAIGHT_JOIN DISTINCT ".join(', ', @CMU::Netdb::structure::machine_fields)."
+        $query = "SELECT DISTINCT ".join(', ', @CMU::Netdb::structure::machine_fields)."
 FROM credentials AS C, memberships as M, protections as P, machine
 WHERE C.authid = '$dbuser'
  AND P.tname = 'machine'
@@ -461,7 +461,7 @@ WHERE C.authid = '$dbuser'
       $in = CMU::Netdb::valid('groups.name', $in, $dbuser, 0, $dbh);
       return CMU::Netdb::getError($in) if (CMU::Netdb::getError($in) != 1);
 
-      $query = "SELECT STRAIGHT_JOIN DISTINCT ".join(', ', @CMU::Netdb::structure::machine_fields)."
+      $query = "SELECT DISTINCT ".join(', ', @CMU::Netdb::structure::machine_fields)."
 FROM groups as G, protections as P, machine 
 WHERE G.name = '$in'
  AND P.tname = 'machine'
@@ -4406,7 +4406,7 @@ sub check_registration_quota {
 
       # drat, neither edge case is true, so we must count the registrations directly owned by the user
       my ($query, $sth);
-      $query = "SELECT STRAIGHT_JOIN COUNT(DISTINCT machine.id)
+      $query = "SELECT COUNT(DISTINCT machine.id)
 FROM credentials as C, protections as P, machine 
 WHERE C.authid = '$dbuser' 
  AND P.tname = 'machine'
@@ -4463,7 +4463,7 @@ WHERE C.authid = '$dbuser'
 
       # drat, neither edge case is true, so we must count the registrations directly owned by the user
       my ($query, $sth);
-      $query = "SELECT STRAIGHT_JOIN COUNT(DISTINCT machine.id)
+      $query = "SELECT COUNT(DISTINCT machine.id)
 FROM credentials as C, protections as P, machine 
 WHERE C.authid = '$dbuser' 
  AND P.tname = 'machine'

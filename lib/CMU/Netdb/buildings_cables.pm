@@ -474,13 +474,13 @@ sub list_outlets_cables_munged_protections {
   
   if ($type eq 'USER') {
     if (CMU::Netdb::can_read_all($dbh, $dbuser, 'outlet', "(P.identity = '$in')", '')) {
-      $query = "SELECT STRAIGHT_JOIN DISTINCT ".
+      $query = "SELECT DISTINCT ".
 	join(', ', @CMU::Netdb::structure::outlet_cable_fields).
 	  " FROM outlet LEFT JOIN cable ON outlet.cable = cable.id ".
 	    "LEFT JOIN building ON building.building = cable.to_building ".
 	      "WHERE 1 \n";
     } else {
-      $query = "SELECT STRAIGHT_JOIN DISTINCT ".join(', ', @CMU::Netdb::structure::outlet_cable_fields)."\n".<<END_SELECT;
+      $query = "SELECT DISTINCT ".join(', ', @CMU::Netdb::structure::outlet_cable_fields)."\n".<<END_SELECT;
 FROM credentials AS C,
      protections as P,
      outlet
@@ -496,9 +496,9 @@ END_SELECT
   } elsif ($type eq 'GROUP') {
     $in = $in*-1;
     if (CMU::Netdb::can_read_all($dbh, $dbuser, 'outlet', "(P.identity = '$in')", '')) {
-      $query = "SELECT STRAIGHT_JOIN DISTINCT ".join(', ', @CMU::Netdb::structure::outlet_cable_fields)." FROM outlet LEFT JOIN cable ON outlet.cable = cable.id LEFT JOIN building ON building.building = cable.to_building WHERE 1\n";
+      $query = "SELECT DISTINCT ".join(', ', @CMU::Netdb::structure::outlet_cable_fields)." FROM outlet LEFT JOIN cable ON outlet.cable = cable.id LEFT JOIN building ON building.building = cable.to_building WHERE 1\n";
     } else {
-      $query = "SELECT STRAIGHT_JOIN DISTINCT ".join(', ', @CMU::Netdb::structure::outlet_cable_fields)."\n".<<END_SELECT;
+      $query = "SELECT DISTINCT ".join(', ', @CMU::Netdb::structure::outlet_cable_fields)."\n".<<END_SELECT;
 FROM credentials AS C, memberships as M, protections as P, outlet LEFT JOIN cable ON outlet.cable = cable.id LEFT JOIN building ON building.building = cable.to_building
 WHERE C.authid = '$dbuser'
  AND P.tname = 'outlet'

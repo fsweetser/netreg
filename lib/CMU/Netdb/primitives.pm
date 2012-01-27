@@ -92,7 +92,7 @@ sub can_read_all {
   }
 
   my ($query, $sth);
-  $query = "SELECT STRAIGHT_JOIN P.tid ";
+  $query = "SELECT P.tid ";
 
   if ($type eq 'CHECK_ALL') {
     $query .= "FROM credentials AS C JOIN users as U ON C.user = U.id ".
@@ -1061,7 +1061,7 @@ sub count {
   $sTable = $tablename;
   # get rid of extra tables. ASSUME the first table is the key table
   $sTable =~ s/(\,|\s).*//;		# get rid of extra tables.
-  $query = "SELECT STRAIGHT_JOIN P.tid ".<<END_SELECT;
+  $query = "SELECT P.tid ".<<END_SELECT;
 FROM  (credentials AS C
  JOIN users as U ON C.user = U.id
  JOIN protections as P)
@@ -1103,7 +1103,7 @@ END_SELECT
     }
   }
   
-  $query = "SELECT STRAIGHT_JOIN COUNT(DISTINCT $sTable.id) ".<<ENDSELECT;
+  $query = "SELECT COUNT(DISTINCT $sTable.id) ".<<ENDSELECT;
 FROM  (credentials AS C
  JOIN users as U ON C.user = U.id, protections as P)
 LEFT JOIN memberships as M ON (U.id = M.uid AND P.identity = CAST(M.gid AS SIGNED INT) * -1),
