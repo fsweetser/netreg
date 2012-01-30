@@ -1448,84 +1448,84 @@ sub modify_dns_zone {
   {
     my $i = 0;
     map { $ofields{$_} = ${$$orig[1]}[$i++] } @zone_f_short;
-}
-map { $$fields{$_} = $ofields{$_} if (!defined $$fields{$_}) } @zone_f_short;
-
-## bidirectional verification of the fields that the user is trying to add
-foreach $key (@dns_zone_fields) {
-  my $nk = $key;		# required because $key is a reference into dns_zone_fields
-  $nk =~ s/^dns_zone\.//;
-  $$fields{$nk} = '' 
-    if (!defined $$fields{$nk} && $nk ne 'id' && $nk ne 'version');
-}
-
-foreach $key (keys %$fields) {
-  if (! grep /^dns_zone\.$key$/, @dns_zone_fields) {
-    warn __FILE__, ':', __LINE__, ' :>'.
-      "Couldn't find dns_zone.$key!\n".join(',', @dns_zone_fields) if ($debug >= 2);
-    return ($CMU::Netdb::errcodes{"EINVALID"}, [$key]);
   }
-  
-  unless ($$fields{'type'} =~ /toplevel/) {
-    if ($key =~ /soa_/) {
-      $$fields{$key} = '';
-      next;
+  map { $$fields{$_} = $ofields{$_} if (!defined $$fields{$_}) } @zone_f_short;
+
+  ## bidirectional verification of the fields that the user is trying to add
+  foreach $key (@dns_zone_fields) {
+    my $nk = $key;		# required because $key is a reference into dns_zone_fields
+    $nk =~ s/^dns_zone\.//;
+    $$fields{$nk} = '' 
+	if (!defined $$fields{$nk} && $nk ne 'id' && $nk ne 'version');
+  }
+
+  foreach $key (keys %$fields) {
+    if (! grep /^dns_zone\.$key$/, @dns_zone_fields) {
+      warn __FILE__, ':', __LINE__, ' :>'.
+	  "Couldn't find dns_zone.$key!\n".join(',', @dns_zone_fields) if ($debug >= 2);
+      return ($CMU::Netdb::errcodes{"EINVALID"}, [$key]);
     }
-  }
-  warn __FILE__, ':', __LINE__, ' :>'.
-    "Verifying $key\n" if ($debug >= 2);
-  $$fields{$key} = CMU::Netdb::valid("dns_zone.$key", $$fields{$key}, $dbuser, $ul, $dbh);
-  return (CMU::Netdb::getError($$fields{$key}), [$key]) if (CMU::Netdb::getError($$fields{$key}) != 1);
-  warn __FILE__, ':', __LINE__, ' :>'.
-    "dns_zone.$key: $$fields{$key}\n" if ($debug >= 2);
   
-  $$newfields{"dns_zone.$key"} = $$fields{$key};
-}
+    unless ($$fields{'type'} =~ /toplevel/) {
+      if ($key =~ /soa_/) {
+	$$fields{$key} = '';
+	next;
+      }
+    }
+    warn __FILE__, ':', __LINE__, ' :>'.
+	"Verifying $key\n" if ($debug >= 2);
+    $$fields{$key} = CMU::Netdb::valid("dns_zone.$key", $$fields{$key}, $dbuser, $ul, $dbh);
+    return (CMU::Netdb::getError($$fields{$key}), [$key]) if (CMU::Netdb::getError($$fields{$key}) != 1);
+    warn __FILE__, ':', __LINE__, ' :>'.
+	"dns_zone.$key: $$fields{$key}\n" if ($debug >= 2);
+  
+    $$newfields{"dns_zone.$key"} = $$fields{$key};
+  }
 
-## figure out the zone parent
-if ($$newfields{'dns_zone.type'} =~ /-toplevel$/) {
-  $$newfields{'dns_zone.parent'} = $id;
-}else{
-  my $r = getParent($$newfields{'dns_zone.name'}, $dbh, $dbuser);
-  $r = 0 if ($r < 1);
-  #    return ($CMU::Netdb::errcodes{EDOMAIN}, ['parent']) if ($r < 1); 
-  $$newfields{'dns_zone.parent'} = $r;
-}
+  ## figure out the zone parent
+  if ($$newfields{'dns_zone.type'} =~ /-toplevel$/) {
+    $$newfields{'dns_zone.parent'} = $id;
+  }else{
+    my $r = getParent($$newfields{'dns_zone.name'}, $dbh, $dbuser);
+    $r = 0 if ($r < 1);
+    #    return ($CMU::Netdb::errcodes{EDOMAIN}, ['parent']) if ($r < 1); 
+    $$newfields{'dns_zone.parent'} = $r;
+  }
 
-# Check if there are any machine or dns_resource records that would be orphaned
-# if the domain is renamed, and refuse to update if any exist.
+  # Check if there are any machine or dns_resource records that would be orphaned
+  # if the domain is renamed, and refuse to update if any exist.
 
   unless ($$newfields{'dns_zone.name'} eq $$fields{'name'}){
-      my $ml = CMU::Netdb::list_machines($dbh, 'netreg', " machine.host_name_zone = '$id' ");
-      if(ref $ml and defined $ml->[1]){
-	  return ($CMU::Netdb::errcodes{EINUSE}, ['machine.host_name_zone']);
-      }
+    my $ml = CMU::Netdb::list_machines($dbh, 'netreg', " machine.host_name_zone = '$id' ");
+    if(ref $ml and defined $ml->[1]){
+      return ($CMU::Netdb::errcodes{EINUSE}, ['machine.host_name_zone']);
+    }
 
-      my $drsl = CMU::Netdb::list_dns_resources($dbh, 'netreg', " rname like '%." . $ofields{'name'} . "' ");
-      if(ref $drsl and defined $drsl->[1]){
-	  return ($CMU::Netdb::errcodes{EINUSE}, ['dns_resource.rname']);
-      }
+    my $drsl = CMU::Netdb::list_dns_resources($dbh, 'netreg', " rname like '%." . $ofields{'name'} . "' ");
+    if(ref $drsl and defined $drsl->[1]){
+      return ($CMU::Netdb::errcodes{EINUSE}, ['dns_resource.rname']);
+    }
   }
 
-$result = CMU::Netdb::primitives::modify($dbh, $dbuser, 'dns_zone', $id, $version, $newfields);
+  $result = CMU::Netdb::primitives::modify($dbh, $dbuser, 'dns_zone', $id, $version, $newfields);
 
-if ($result == 0) {
-  # An error occurred
-  $query = "SELECT id FROM dns_zone WHERE id='$id' AND version='$version'";
-  $sth = $dbh->prepare($query);
-  warn __FILE__, ':', __LINE__, ' :>'.
-    "CMU::Netdb::auth::modify_dns_zone: $query\n" if ($debug >= 2);
-  $sth->execute();
-  if ($sth->rows() == 0) {
+  if ($result == 0) {
+    # An error occurred
+    $query = "SELECT id FROM dns_zone WHERE id='$id' AND version='$version'";
+    $sth = $dbh->prepare($query);
     warn __FILE__, ':', __LINE__, ' :>'.
-      "CMU::Netdb::auth::modify_dns_zone: id/version were stale\n" if ($debug);
-    return ($CMU::Netdb::errcodes{"ESTALE"}, ['stale']);
-  } else {
-    return ($CMU::Netdb::errcodes{"ERROR"}, ['unknown']);
+	"CMU::Netdb::auth::modify_dns_zone: $query\n" if ($debug >= 2);
+    $sth->execute();
+    if ($sth->rows() == 0) {
+      warn __FILE__, ':', __LINE__, ' :>'.
+	  "CMU::Netdb::auth::modify_dns_zone: id/version were stale\n" if ($debug);
+      return ($CMU::Netdb::errcodes{"ESTALE"}, ['stale']);
+    } else {
+      return ($CMU::Netdb::errcodes{"ERROR"}, ['unknown']);
+    }
   }
-}
 
-return ($result,[]);
+  return ($result,[]);
 
 }
 
