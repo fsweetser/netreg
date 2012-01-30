@@ -1792,8 +1792,8 @@ sub auth_Search_Groups_Int {
   
   # execute a search
   print "<B>Items matching your query:</b><br>\n";
-  CMU::WebInt::auth_Print_Groups($user, $dbh, $q, " (groups.name like \"%$a%\" OR ".
-		   "groups.description like \"%$a%\") ", $ENV{SCRIPT_NAME}, "op=auth_grp_search&a=$a", 's_start');
+  CMU::WebInt::auth_Print_Groups($user, $dbh, $q, " (groups.name like '%$a%' OR ".
+		   "groups.description like '%$a%') ", $ENV{SCRIPT_NAME}, "op=auth_grp_search&a=$a", 's_start');
     
   return 1;
 }
@@ -1832,8 +1832,8 @@ sub auth_Search_Users_Int {
   # execute a search
   print "<B>Items matching your query:</b><br>\n";
   CMU::WebInt::auth_Print_Users
-      ($user, $dbh, $q, " (credentials.authid like \"%$a%\" OR ".
-       "credentials.description like \"%$a%\") ", 
+      ($user, $dbh, $q, " (credentials.authid like '%$a%' OR ".
+       "credentials.description like '%$a%') ", 
        $ENV{SCRIPT_NAME}, "op=auth_user_search&a=$a", 's_start');
 
   return 1;
