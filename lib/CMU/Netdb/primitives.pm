@@ -251,7 +251,7 @@ sub list {
   my $CRA = CMU::Netdb::primitives::can_read_all
     ($dbh, $dbuser, $sTable,
      "(P.identity = 0 OR (U.id = P.identity)".
-     "OR (CAST(M.gid AS SIGNED INT) * -1 = P.identity))", 'CHECK_ALL');
+     "OR (CAS(MT.gid AS SIGNED INT) * -1 = P.identity))", 'CHECK_ALL');
 
   if ($CRA) {
     $query = "SELECT DISTINCT ".(join ', ', @$tablefields)." FROM $tablename";
@@ -358,9 +358,9 @@ sub get {
 
   $query = "SELECT DISTINCT " . (join ', ', @$tablefields) . <<ENDSELECT;
 
-FROM  (credentials AS C
- JOIN users as U ON C.user = U.id
- JOIN protections as P)
+FROM  credentials AS C
+  CROSS JOIN users as U ON C.user = U.id
+  CROSS JOIN protections as P
 LEFT JOIN memberships as M ON (M.uid = U.id AND P.identity = CAST(M.gid AS SIGNED INT) * -1),
      $tablename
 WHERE C.authid = '$dbuser'
@@ -424,7 +424,7 @@ sub add {
 
   $query =<<ENDSELECT;
 SELECT DISTINCT P.tname 
-FROM (credentials AS C, protections AS P)
+FROM credentials AS C CROSS JOIN protections AS P
 LEFT JOIN memberships as M
   ON (C.user = M.uid AND P.identity = CAST(M.gid AS SIGNED INT) * -1)
 WHERE
@@ -454,7 +454,7 @@ ENDSELECT
   delete $$fields{"$sTable.version"} if (defined $$fields{"$sTable.version"});
 
   $query = "INSERT INTO $sTable (";
-  $query .= join ', ', sort keys %$fields;
+  $query .= join ', ', (map { s/^.*\.// ; $_ } sort keys %$fields);
   $query .= ") VALUES (";
   foreach $key (sort keys %$fields) {
     unless ($key =~ /^$sTable\./) {
@@ -472,15 +472,24 @@ ENDSELECT
   
   warn __FILE__, ':', __LINE__, ' :>'.
     "CMU::Netdb::primitives::add query: $query\n" if ($debug >= 2);
+
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
   if (!($result = $dbh->do($query))) {
     warn __FILE__, ':', __LINE__, ' :>'.
       "CMU::Netdb::primitives::add error: $DBI::errstr\n";
     $db_errstr = $DBI::errstr;
+    CMU::Netdb::xaction_rollback($dbh);
     return $CMU::Netdb::errors::errcodes{"EDB"};
   } else {
     # LOG ALL CHANGES
     # First create the changelog record
-    my $row = $dbh->{'mysql_insertid'};
+    my $row = $dbh->last_insert_id(undef, undef, $sTable, undef);
     my $log = changelog_id($dbh, $dbuser);
     if ($log) {
       # Now create the changelog row record
@@ -497,6 +506,7 @@ ENDSELECT
     $db_insertid = $row;
   }
 
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return $result;
 }
 
@@ -553,10 +563,12 @@ sub modify {
 
   $query = "UPDATE $tablename SET ";
   foreach $key (sort keys %$fields) {
-    $query .= "$key=" . $dbh->quote($$fields{$key}) . ", " unless ($$fields{$key} =~ /^\*EXPR\: /);
+    my $shortkey = $key;
+    $shortkey =~ s/^.*\.//;
+    $query .= "$shortkey=" . $dbh->quote($$fields{$key}) . ", " unless ($$fields{$key} =~ /^\*EXPR\: /);
     if ($$fields{$key} =~ /^\*EXPR\: /) {
       $$fields{$key} =~ s/\*EXPR\: //;
-      $query .= "$key= $$fields{$key}" .", ";
+      $query .= "$shortkey=" . $$fields{$key} .", ";
     }
   }
   substr($query, -2) = " WHERE id='$id' AND version='$version'";
@@ -565,8 +577,12 @@ sub modify {
     "CMU::Netdb::primitives::modify query: $query\n" if ($debug >= 2);
 
   # If we have transactional capabilities, use them.
-  my ($res, $errf) = CMU::Netdb::xaction_begin($dbh);
-  return $res if ($res <= 0);
+  my ($res, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($res <= 0){
+      return $res;
+  }else{
+      $xref = shift @{$xref};
+  }
 
   # LOG ALL CHANGES
   # First, prefetch the existing row
@@ -628,7 +644,7 @@ sub modify {
     return $CMU::Netdb::errors::errcodes{"EDB"};
   }
 
-  my ($xr, $xd) = CMU::Netdb::xaction_commit($dbh);
+  my ($xr, $xd) = CMU::Netdb::xaction_commit($dbh, $xref);
   if ($xr != 1) {
     # Failed to properly commit; xr == 2 means it rolled back successfully
     warn __FILE__, ':', __LINE__, ' :>'.
@@ -682,8 +698,12 @@ sub delete {
     if (CMU::Netdb::getError($version) != 1);
 
   # If we have transactional capabilities, use them.
-  my ($res, $errf) = CMU::Netdb::xaction_begin($dbh);
-  return ($res, $errf) if ($res <= 0);
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
   
   my ($cdRes, $rData) = CMU::Netdb::primitives::delete_cascade_check
     ($dbh, $dbuser, $tablename, $id, 1);
@@ -820,7 +840,7 @@ sub delete {
   }
 
   # Success. Go ahead and commit
-  my ($xr, $xd) = CMU::Netdb::xaction_commit($dbh);
+  my ($xr, $xd) = CMU::Netdb::xaction_commit($dbh, $xref);
   if ($xr != 1) {
     # Failed to properly commit; xr == 2 means it rolled back successfully
     warn __FILE__, ':', __LINE__, ' :>'.
@@ -967,7 +987,7 @@ sub delete_cascade_xmrone {
   my $ForeignTable = $TableRef;
   $ForeignTable =~ s/\..*$//;
 
-  my $Query = "SELECT \"$ForeignTable\", $ForeignTable.id, ".
+  my $Query = "SELECT '$ForeignTable', $ForeignTable.id, ".
     " $ForeignTable.version FROM $ForeignTable ".
       "WHERE $TableRef = '$TableNeed' AND $TIDRef = '$CTID' ".
 	$saveSQLtime;
@@ -1062,9 +1082,9 @@ sub count {
   # get rid of extra tables. ASSUME the first table is the key table
   $sTable =~ s/(\,|\s).*//;		# get rid of extra tables.
   $query = "SELECT P.tid ".<<END_SELECT;
-FROM  (credentials AS C
- JOIN users as U ON C.user = U.id
- JOIN protections as P)
+FROM  credentials AS C
+ CROSS JOIN users as U ON C.user = U.id
+ CROSS JOIN protections as P
 LEFT JOIN memberships as M ON (U.id = M.uid AND P.identity = CAST(M.gid AS SIGNED INT) * -1)
 WHERE
 C.authid = '$dbuser'
@@ -1104,8 +1124,8 @@ END_SELECT
   }
   
   $query = "SELECT COUNT(DISTINCT $sTable.id) ".<<ENDSELECT;
-FROM  (credentials AS C
- JOIN users as U ON C.user = U.id, protections as P)
+FROM  credentials AS C
+ CROSS JOIN users as U ON C.user = U.id, protections as P
 LEFT JOIN memberships as M ON (U.id = M.uid AND P.identity = CAST(M.gid AS SIGNED INT) * -1),
      $tablename
 WHERE
@@ -1149,7 +1169,7 @@ sub changelog_start {
 			      $dbh);
   return 0 if (CMU::Netdb::getError($dbuser) != 1);
 
-  my $query = "INSERT INTO _sys_changelog (user, name, time, info) ".
+  my $query = "INSERT INTO _sys_changelog (\"user\", name, time, info) ".
     "SELECT C.user, '$dbuser', now(), '$changelog_info' ".
       "FROM credentials AS C WHERE C.authid = '$dbuser'";
 
@@ -1159,10 +1179,15 @@ sub changelog_start {
       "CMU::Netdb::primitives::changelog_start adding changelog: $DBI::errstr\n";
     return 0;
   } else {
-    my $log = $dbh->{'mysql_insertid'};
+    my $log = $dbh->last_insert_id(undef, undef, "_sys_changelog", undef);
     return $log;
   }
 }
+
+# TODO: should all of the various changelog functions do their own
+# transaction start/stop calls?  In theory none of them should ever
+# be called outside of a transaction, but it may be safer to include
+# them anyway.
 
 # If no changelog is already started, call changelog_start and store the 
 # resulting rowid in $CMU::Netdb::primitives::changelog_id
@@ -1266,7 +1291,7 @@ sub changelog_row {
     return 0;
   }
 
-  $clrow = $dbh->{'mysql_insertid'};
+  my $log = $dbh->last_insert_id(undef, undef, "_sys_changerec_row", undef);
 
   if ($netevent) {
     my ($count, $more) = $netevent->notify_row('netdb', $table, $row, $type);
