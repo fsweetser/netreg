@@ -315,18 +315,29 @@ sub getError {
   return 1;
 }
 
-# There are two possible default formats that a timestamp column can
+# There are three possible default formats that a timestamp column can
 # return.  In mysql 4.0 and previous, it returned as an integer
 # formatted YYYYMMDDHHMMSS.  In 4.1 (as presumably after), the default
 # return is a datetime string formatted 'YYYY-MM-DD HH-MM-SS'.  This
 # function should accept either format.
 #
+# PostgreSQL is like the MySQL 4.1 format, but with sub-second resolution,
+# so we have to handle fractional seconds
+#
 # FIXME: We should be aware of what database version we're using and
 # only accept the right format,
 sub verify_timestamp {
   my ($in, $user, $ul, $dbh) = @_;
+
+  # MySQL 4.0 and earlier
   return $in if ($in =~ /^\d{14}$/);
+
+  # MySQL 4.1 and newer
   return $in if ($in =~ /^\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d$/);
+
+  # PostgreSQL
+  return $in if ($in =~ /^\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+$/);
+
   return "$INVALID$errcodes{EINVALID}";
 }
 
@@ -427,7 +438,8 @@ sub verify_macaddress {
 
 sub verify_expires {
   my ($in) = @_;
-  return $in if ($in eq '' || $in =~ /^\d{4}-\d{2}-\d{2}$/);
+  return $in if $in =~ /^\d{4}-\d{2}-\d{2}$/;
+  return '*EXPR: NULL' if ($in eq '' or $in eq '0000-00-00');
   return "$INVALID$errcodes{EINVCHAR}" unless ($in =~ /^\(now\(\) \+ interval \d+ day\)$/);
   return '*EXPR: '.$in;
 }
@@ -441,7 +453,8 @@ sub verify_subnet_p_lastdone {
 
 sub verify_datetime {
   my ($in) = @_;
-  return $in if ($in eq '' || $in eq '0000-00-00');
+  return '*EXPR: NULL' if ($in eq '' or $in eq '0000-00-00');
+  return $in if ($in =~ /\d\d\d\d-\d\d-\d\d/);
   return $in if ($in =~ /^\A\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?\Z$/);
   return $in if ($in =~ /^\d{14}$/);
   return '*EXPR: now()' if ($in eq 'now()');
