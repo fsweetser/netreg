@@ -695,9 +695,16 @@ sub add_service {
   $scr = CMU::Netdb::get_service_types($dbh, $dbuser, "service_type.id = '$$newfields{'service.type'}'");
   return ($CMU::Netdb::errcodes{ENOENT}, ['type']) if (!ref $scr || !defined $scr->[1]);
   
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
   
   my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'service', $newfields);
   if ($res < 1) {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($res, []);
   }
   my %warns = ('insertID' => $CMU::Netdb::primitives::db_insertid);
@@ -723,6 +730,8 @@ sub add_service {
       warn __FILE__, ':', __LINE__, ' :>'.
 	"$Pr failure adding protections entries for ".
 	  "service/$warns{insertID}: ".join(',', @$AErrf)."\n";
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($ARes, $AErrf);
     }
   }
   return ($res, \%warns);
@@ -771,8 +780,15 @@ sub add_service_type {
     $$newfields{"service_type.$key"} = $$fields{$key};
   }
   
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
   my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'service_type', $newfields);
   if ($res < 1) {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($res, []);
   }
   my %warns = ('insertID' => $CMU::Netdb::primitives::db_insertid);
@@ -798,8 +814,11 @@ sub add_service_type {
       warn __FILE__, ':', __LINE__, ' :>'.
 	"$Pr failure adding protections entries for ".
 	  "service_type/$warns{insertID}: ".join(',', @$AErrf)."\n";
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($ARes, $AErrf);
     }
   }
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($res, \%warns);
 }
 
@@ -1159,6 +1178,13 @@ sub delete_service_membership {
   }
   return ($errcodes{EPERM}, ['service']) if ($ul < 1);
   
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
   # since we're running this as netreg, start the changelog as the real user first.
   CMU::Netdb::primitives::changelog_id($dbh, $dbuser);
   ($result, $dref) = CMU::Netdb::primitives::delete
@@ -1174,12 +1200,15 @@ sub delete_service_membership {
     if ($sth->rows() == 0) {
       warn __FILE__, ':', __LINE__, ' :>'.
 	"CMU::Netdb::dns_dhcp::delete_service_membership: id/version were stale\n" if ($debug);
+      CMU::Netdb::xaction_rollback($dbh);
       return ($CMU::Netdb::errcodes{"ESTALE"}, ['stale']);
     } else {
+      CMU::Netdb::xaction_rollback($dbh);
       return ($result, $dref);
     }
   }
-  
+
+  CMU::Netdb::xaction_commit($dbh, $xref);  
   return ($result, []);
   
 }
@@ -1236,9 +1265,17 @@ sub add_attribute_spec {
   }else{
     $$newfields{'attribute_spec.type'} = 0;
   }
+
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
   
   my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'attribute_spec', $newfields);
   if ($res < 1) {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($res, []);
   }
   my %warns = ('insertID' => $CMU::Netdb::primitives::db_insertid);
@@ -1264,9 +1301,12 @@ sub add_attribute_spec {
       warn __FILE__, ':', __LINE__, ' :>'.
 	"$Pr failure adding protections entries for ".
 	  "attribute_spec/$warns{insertID}: ".join(',', @$AErrf)."\n";
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($ARes, $AErrf);
     }
   }
 
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($res, \%warns);
 }
 
@@ -1315,14 +1355,29 @@ sub set_attribute {
     } elsif ($#$attrs == 0) {
       return CMU::Netdb::add_attribute($dbh, $dbuser, $fields);
     } else {
+      my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+      if ($xres == 1){
+	$xref = shift @{$xref};
+      }else{
+	return ($xres, $xref);
+      }
       my $attrmap = CMU::Netdb::makemap($attrs->[0]);
       my $id = $attrs->[1][$attrmap->{'attribute.id'}];
       my $version = $attrs->[1][$attrmap->{'attribute.version'}];
 
       my ($res, $ref) = CMU::Netdb::delete_attribute($dbh, $dbuser, $id, $version);
-      return ($res, $ref) if ($res != 1);
+      if ($res != 1) {
+	CMU::Netdb::xaction_rollback($dbh);
+	return ($res, $ref);
+      }
 
-      return CMU::Netdb::add_attribute($dbh, $dbuser, $fields);
+      ($res, $ref) = CMU::Netdb::add_attribute($dbh, $dbuser, $fields);
+      if($res != 1) {
+	CMU::Netdb::xaction_rollback($dbh);
+      } else {
+	CMU::Netdb::xaction_commit($dbh, $xref);
+      }
+      return ($res, $ref);
     }
   }
 }
