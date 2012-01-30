@@ -2782,8 +2782,8 @@ sub rep_zone_util {
 
     # get a list of all sub zones
     my $szqry = $dbh->prepare("select parent.id, count(child.name) from dns_zone parent,
-                               dns_zone child where child.name like concat('%.', parent.name)
-                               group by parent.name");
+                               dns_zone child where child.name like '%.' || parent.name
+                               group by parent.id, parent.name");
     $szqry->execute;
     while(my $sz = $szqry->fetchrow_arrayref){
 	$subz{$sz->[0]} = $sz->[1];

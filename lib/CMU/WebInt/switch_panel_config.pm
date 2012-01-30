@@ -141,7 +141,7 @@ sub display_switch_panel_query {
 
 
   print "<br /><hr /><br />\n";
-  $query = "( machine.host_name like \"%.sw.%\") order by machine.host_name";
+  $query = "( machine.host_name like '%.sw.%') order by machine.host_name";
 
   ($result, $err ) = CMU::Netdb::list_trunkset_presences($dbh, $user, 'machine', $query);
   $repos = CMU::Netdb::makemap(shift @$result);
