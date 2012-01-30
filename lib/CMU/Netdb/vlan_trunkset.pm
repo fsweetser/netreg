@@ -160,7 +160,16 @@ sub add_vlan {
 #  return ($errcodes{EEXISTS}, ['vlan.number'])
 #    if (@row && defined $row[0] && $row[0] > 0);
   
-  my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'vlan', $newfields);    if ($res < 1) {
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
+  my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'vlan', $newfields);
+  if ($res < 1) {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($res, []);
   }
   my %warns = ('insertID' => $CMU::Netdb::primitives::db_insertid);
@@ -185,9 +194,12 @@ sub add_vlan {
       warn __FILE__, ':', __LINE__, ' :>'.
 	"$Pr failure adding protections entries for ".
 	  "vlan/$warns{insertID}: ".join(',', @$AErrf)."\n";
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($ARes, $AErrf);
     }
   }
-  
+
+  CMU::Netdb::xaction_commit($dbh, $xref);  
   return ($res, \%warns);
 }
 
@@ -640,15 +652,21 @@ sub add_trunkset {
   return ($errcodes{EEXISTS}, ['trunk_set.name'])
     if (@row && defined $row[0] && $row[0] > 0);
   
-  my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'trunk_set', $newfields);    if ($res < 1) {
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
+  my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'trunk_set', $newfields);
+  if ($res < 1) {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($res, []);
   }
   my %warns = ('insertID' => $CMU::Netdb::primitives::db_insertid);
 
   ## Addition was successful. Go ahead and add default permissions.
-  ## Failure here is not fatal; permissions just need to be dealt with 
-  ## manually.
-  ## FIXME transactions possibly useful here.
   if ($warns{insertID} == 0) {
     # This probably indicates a bug in DBI, because an insertid of 0
     # is completely bogus, but possible if the version of DBD::mysql
@@ -665,9 +683,12 @@ sub add_trunkset {
       warn __FILE__, ':', __LINE__, ' :>'.
 	"$Pr failure adding protections entries for ".
 	  "trunk_set/$warns{insertID}: ".join(',', @$AErrf)."\n";
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($ARes, $AErrf);
     }
   }
-  
+
+  CMU::Netdb::xaction_commit($dbh, $xref);  
   return ($res, \%warns);
 }
 
