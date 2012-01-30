@@ -34,7 +34,7 @@ use vars qw(@ISA @EXPORT @EXPORT_OK $debug @machine_fields
 	    @subnet_fields @subnet_share_fields @subnet_presence_fields 
 	    @subnet_domain_fields @subnet_domain_zone_fields
             @domain_subnet_fields
- 	    @network_fields $IPSuperMask
+ 	    @network_fields
 	    @subnet_registration_modes_fields
 	    %AllocationMethods @vlan_fields @vlan_subnet_presence_fields
 	    @vlan_subnet_presence_subnetvlan_fields);
@@ -134,7 +134,6 @@ require Exporter;
 @vlan_subnet_presence_fields = @CMU::Netdb::structure::vlan_subnet_presence_fields;
 @vlan_subnet_presence_subnetvlan_fields = @CMU::Netdb::structure::vlan_subnet_presence_subnetvlan_fields;
 
-$IPSuperMask = '(0x100000000 - 1)';
 %AllocationMethods = %CMU::Netdb::structure::AllocationMethods;
 
 $debug = 0;
@@ -281,7 +280,7 @@ sub list_machines_subnets {
   $dbuser = CMU::Netdb::valid('credentials.authid', $dbuser, $dbuser, 0, $dbh);
   return CMU::Netdb::getError($dbuser) if (CMU::Netdb::getError($dbuser) != 1);
   
-  $where = '1' if ($where eq '');
+  $where = 'TRUE' if ($where eq '');
   my $nwhere = "subnet.id = machine.ip_address_subnet AND $where";
   
   @fields = @machine_fields;
@@ -311,7 +310,7 @@ sub list_machines_fw_zones {
   $dbuser = CMU::Netdb::valid('credentials.authid', $dbuser, $dbuser, 0, $dbh);
   return CMU::Netdb::getError($dbuser) if (CMU::Netdb::getError($dbuser) != 1);
   
-  $where = '1' if ($where eq '');
+  $where = 'TRUE' if ($where eq '');
   my $nwhere = "dns_zone.id = machine.host_name_zone AND $where";
   
   my @f = (@machine_fields, @CMU::Netdb::structure::dns_zone_fields);
@@ -341,7 +340,7 @@ sub list_machines_rv_zones {
   $dbuser = CMU::Netdb::valid('credentials.authid', $dbuser, $dbuser, 0, $dbh);
   return CMU::Netdb::getError($dbuser) if (CMU::Netdb::getError($dbuser) != 1);
   
-  $where = '1' if ($where eq '');
+  $where = 'TRUE' if ($where eq '');
   my $nwhere = "dns_zone.id = machine.ip_address_zone AND $where";
   
   my @f = (@machine_fields, @CMU::Netdb::structure::dns_zone_fields);
@@ -1306,12 +1305,10 @@ sub add_mod_machine_static {
       " ### IP Address: $$fields{'ip_address'}\n" if ($debug >= 2);
     $ip = CMU::Netdb::dot2long($$fields{'ip_address'});
     #$ip = $$fields{'ip_address'};
-    my $IPSuperMask = '(0xffffffff)';
-    $hzones = CMU::Netdb::list_subnets_ref($dbh, $dbuser, " ((base_address |".
-					   "(~network_mask&$IPSuperMask)) ".
-					   " ='$ip' ".
-					   "OR base_address = '$ip')", 
-					   'subnet.name');
+    $hzones = CMU::Netdb::list_subnets_ref($dbh, $dbuser, 
+					   "host(network(base_address)) = '$ip' OR " .
+					   "host(broadcast(base_address)) = '$ip'",
+					   "subnet.name");
     return ($hzones, ['ip_address']) if (!ref $hzones);
     my $hzk = keys %$hzones;
     return ($errcodes{EBROADCAST}, ['ip_address']) if ($hzk >= 1);
@@ -1352,7 +1349,7 @@ sub add_mod_machine_static {
     } else {
       $ip = $$fields{'ip_address'};
     }
-    $hzones = CMU::Netdb::list_subnets_ref($dbh, $dbuser, " (base_address = ('$ip' & network_mask)) ", 'subnet.name');
+    $hzones = CMU::Netdb::list_subnets_ref($dbh, $dbuser, " '$ip' << base_address ", 'subnet.name');
     return ($hzones, ['ip_address']) if (!ref $hzones);
     my $hzk = keys %$hzones;
     my @hza = keys %$hzones;
@@ -1361,9 +1358,9 @@ sub add_mod_machine_static {
     return ($errcodes{EBADIP}, ['ip_address']) if ($$fields{'ip_address_subnet'} != $hza[0]);
     my $hip;
     if ($upd) {
-      $hip = CMU::Netdb::list_machines($dbh, 'netreg', "machine.ip_address=$ip AND machine.id != " . $ofields{'id'});
+	$hip = CMU::Netdb::list_machines($dbh, 'netreg', "machine.ip_address='$ip' AND machine.id != " . $ofields{'id'});
     } else {
-      $hip = CMU::Netdb::list_machines($dbh, 'netreg', "machine.ip_address=$ip");
+	$hip = CMU::Netdb::list_machines($dbh, 'netreg', "machine.ip_address='$ip'");
     }
     return ($hip, ['ip_address']) if (!ref ($hip));
     # count the rows in the array
@@ -1427,17 +1424,41 @@ sub add_mod_machine_static {
   delete($$newfields{'machine.created'}) if ($upd);
 
 
-  $dbh->do("LOCK TABLES machine WRITE, machine AS M1 READ, machine as M2 READ,
-subnet AS S1 READ, subnet AS S2 READ, users as U READ, groups as G READ,
-protections as P read, dns_zone READ, memberships as M READ, subnet READ,
-dns_resource as DR read, _sys_changelog WRITE , _sys_changerec_row WRITE,
-_sys_changerec_col WRITE, credentials AS C READ");
+  my @locks = (
+	       "_sys_changelog",
+	       "_sys_changerec_col",
+	       "_sys_changerec_row",
+	       "building",
+	       "credentials",
+	       "dns_resource",
+	       "dns_zone",
+	       "groups",
+	       "machine",
+	       "machine_outlet",
+	       "memberships",
+	       "protections",
+	       "subnet",
+	       "subnet_registration_modes",
+	       "users",
+	       );
   
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+      $xref = shift @{$xref};
+  }else{
+      return ($xres, $xref);
+  }
+  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
+ 
+  unless($lockres == 1){
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($errcodes{"EDB"}, $lockref);
+  }
   
   if ($$newfields{'machine.mac_address'} ne '' &&
       !verify_mac_subnet_unique($dbh, $newfields, $upd) && 
       $$newfields{'machine.mode'} ne 'secondary') {
-    $dbh->do("UNLOCK TABLES");
+    CMU::Netdb::xaction_rollback($dbh);
     return ($errcodes{EEXISTS}, ['mac_address']);
   }
   
@@ -1446,14 +1467,14 @@ _sys_changerec_col WRITE, credentials AS C READ");
     my ($h, $d) = CMU::Netdb::splitHostname($$newfields{'machine.host_name'});
     $$newfields{'machine.host_name'} = getRandomHostname($dbh, $d);
     if ($$newfields{'machine.host_name'} eq '') {
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       return ($errcodes{ESYSTEM}, ['host_name']);
     }
   }
   
   ## verify uniqueness of hostname
   unless(check_host_unique($dbh, $dbuser, $newfields, $upd)) {
-    $dbh->do("UNLOCK TABLES");
+    CMU::Netdb::xaction_rollback($dbh);
     return ($errcodes{EEXISTS}, ['host_name']);
   }
   
@@ -1463,7 +1484,7 @@ _sys_changerec_col WRITE, credentials AS C READ");
       ">>>> finding available IP\n" if ($debug >= 2);
     my $newip = find_available_ip($dbh, $newfields);
     if (!ref $newip) {
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       return ($newip, ['ip_address']);
     }
     $$newfields{'machine.ip_address'} = $$newip[0];
@@ -1474,7 +1495,7 @@ _sys_changerec_col WRITE, credentials AS C READ");
   
   # figure out the ip_address_zone
   if ($$newfields{'machine.ip_address'} eq '') {
-    $dbh->do("UNLOCK TABLES");
+    CMU::Netdb::xaction_rollback($dbh);
     return ($errcodes{EINVALID}, ['ip_address']);
   }
   warn  __FILE__, ':', __LINE__, ' :>'.
@@ -1483,7 +1504,7 @@ _sys_changerec_col WRITE, credentials AS C READ");
   @hzones = keys %{CMU::Netdb::list_zone_ref($dbh, $dbuser, 
 					     " dns_zone.name = '$ipc[2].$ipc[1].$ipc[0].in-addr.arpa' ", 'GET')};
   if ($#hzones != 0) {
-    $dbh->do("UNLOCK TABLES");
+    CMU::Netdb::xaction_rollback($dbh);
     return ($errcodes{EDOMAIN}, ['ip_address']);
   }
   $$newfields{'machine.ip_address_zone'} = $hzones[0];
@@ -1515,9 +1536,11 @@ _sys_changerec_col WRITE, credentials AS C READ");
     }
 
   }
-  $dbh->do("UNLOCK TABLES");
   $warns{host_name} = $$newfields{'machine.host_name'};
-  return ($res, {'new' => $newfields}) if ($res < 1);
+  if ($res < 1) { 
+    CMU::Netdb::xaction_commit($dbh, $xref);
+    return ($res, {'new' => $newfields});
+  }
   return ($res, \%warns);
 }
 
@@ -1644,29 +1667,52 @@ sub add_mod_machine_dynamic {
   }
   $$newfields{'machine.ip_address_zone'} = $$fields{'ip_address_zone'};
   
-  $dbh->do("LOCK TABLES machine WRITE, machine AS M1 READ, machine as M2 READ,
-subnet AS S1 READ, subnet AS S2 READ, users as U READ, groups as G READ,
-protections as P read, dns_zone READ, memberships as M READ, subnet READ, 
-dns_resource as DR READ, _sys_changelog WRITE , _sys_changerec_row WRITE, 
-_sys_changerec_col WRITE, credentials AS C READ");
+  my @locks = (
+	       "_sys_changelog",
+	       "_sys_changerec_col",
+	       "_sys_changerec_row", 
+	       "credentials",
+	       "dns_resource",
+	       "dns_zone",
+	       "groups",
+	       "machine",
+	       "machine_outlet",
+	       "memberships",
+	       "protections",
+	       "subnet",
+	       "users",
+	       );
+  
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+      $xref = shift @{$xref};
+  }else{
+      return ($xres, $xref);
+  }
+  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
+  unless($lockres == 1){
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($errcodes{"EDB"}, $lockref);
+  }
+
   
   # verify a bunch of properties about the MAC address
   if ($$newfields{'machine.mac_address'} eq '000000000000') {
-    $dbh->do("UNLOCK TABLES");
+    CMU::Netdb::xaction_rollback($dbh);
     return ($errcodes{EINVALID}, ['mac_address']);
   }
   if (!$virtual) {
-    my $lmqr = "machine.ip_address_subnet = \"" . $$newfields{'machine.ip_address_subnet'}.
-      "\" AND machine.mac_address = '".$$newfields{'machine.mac_address'}."'";
+    my $lmqr = "machine.ip_address_subnet = '" . $$newfields{'machine.ip_address_subnet'}.
+      "' AND machine.mac_address = '".$$newfields{'machine.mac_address'}."'";
     $lmqr .= " AND machine.id != '$upd'" if ($upd > 0);
     my $mcref = CMU::Netdb::list_machines($dbh, 'netreg', $lmqr);
     if (!ref $mcref) {
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       return ($mcref, ['mac_address']) 
     }
     my $mcc = $#$mcref;
     if ($mcc > 0) {
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       return ($errcodes{EEXISTS}, ['mac_address']);
     }
   }
@@ -1682,7 +1728,7 @@ _sys_changerec_col WRITE, credentials AS C READ");
     $MAX_DYN_MAC= 5 if ($res != 1);
 
     if (@$r_mac_list > $MAX_DYN_MAC) {
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       return ($errcodes{EMAXMAC}, ['mac_address']);
     }
   }
@@ -1693,14 +1739,14 @@ _sys_changerec_col WRITE, credentials AS C READ");
     my ($h, $d) = CMU::Netdb::splitHostname($$newfields{'machine.host_name'});
     $$newfields{'machine.host_name'} = getRandomHostname($dbh, $d);
     if ($$newfields{'machine.host_name'} eq '') {
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       return ($errcodes{ESYSTEM}, ['host_name']);
     }
   }
   
   ## verify uniqueness of hostname
   unless(($$fields{'host_name'} eq '') || (check_host_unique($dbh, $dbuser, $newfields, $upd))) {
-    $dbh->do("UNLOCK TABLES");
+    CMU::Netdb::xaction_rollback($dbh);
     return ($errcodes{EEXISTS}, ['host_name']);
   }
   
@@ -1732,10 +1778,13 @@ _sys_changerec_col WRITE, credentials AS C READ");
     }
 
   }
-  $dbh->do("UNLOCK TABLES");
   
   $warns{host_name} = $$newfields{'machine.host_name'};
-  return ($res, {'new' => $newfields}) if ($res < 1);
+  if ($res < 1) {
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($res, {'new' => $newfields});
+  }
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($res, \%warns);
 }
 
@@ -1800,9 +1849,7 @@ sub add_mod_machine_pool {
   if ($$fields{ip_address} ne '') {
     $ip = CMU::Netdb::dot2long($$fields{'ip_address'});
     $hzones = CMU::Netdb::list_subnets_ref($dbh, $dbuser, 
-					   " (base_address | ".
-					   "(~network_mask&$IPSuperMask)) ".
-					   "='$ip' ", 'subnet.name');
+					   " broadcast(base_address) = '$ip' ", 'subnet.name');
     warn "exit 3" if ($debug);
     return ($hzones, ['ip_address']) if (!ref $hzones);
     $hzk = keys %$hzones;
@@ -1815,7 +1862,7 @@ sub add_mod_machine_pool {
     }
     
     # and not base
-    $hzones = CMU::Netdb::list_subnets_ref($dbh, $dbuser, " base_address='$ip' ", 'subnet.name');
+    $hzones = CMU::Netdb::list_subnets_ref($dbh, $dbuser, " host(base_address)='$ip' ", 'subnet.name');
     warn "exit 6" if ($debug);
     return ($hzones, ['ip_address']) if (!ref $hzones);
     $hzk = keys %$hzones;
@@ -1847,7 +1894,8 @@ sub add_mod_machine_pool {
     my $gdUser = $dbuser;
     $gdUser = 'netreg' if ($upd > 0 && ($ofields{host_name} eq $$fields{host_name}));
     my $ldsr = CMU::Netdb::get_domains_for_subnet($dbh, $gdUser, 
-						  "subnet_domain.domain = '$domain' and subnet_domain.subnet = '$$fields{'ip_address_subnet'}'");
+						  "subnet_domain.domain = '$domain' and subnet_domain.subnet = '" .
+						    $$fields{'ip_address_subnet'} . "'");
     warn "exit 11" if ($debug);
     return ($ldsr, ['host_name']) if (!ref $ldsr);
     my $ldsc = $#$ldsr;
@@ -1859,7 +1907,7 @@ sub add_mod_machine_pool {
   ## they match.  Also verify that this address is not already registered.
   unless ($$fields{mode} eq 'reserved' && $$fields{ip_address} eq '') {
     $ip = CMU::Netdb::dot2long($$fields{'ip_address'});
-    $hzones = CMU::Netdb::list_subnets_ref($dbh, $dbuser, " (base_address = ('$ip' & network_mask)) ", 'subnet.name');
+    $hzones = CMU::Netdb::list_subnets_ref($dbh, $dbuser, " base_address >> '$ip' ", 'subnet.name');
     warn "exit 13" if ($debug);
     return ($hzones, ['ip_address']) if (!ref $hzones);
     $hzk = keys %$hzones;
@@ -1870,9 +1918,9 @@ sub add_mod_machine_pool {
     return ($errcodes{EBADIP}, ['ip_address']) if ($$fields{'ip_address_subnet'} != $hza[0]);
     my $hip;
     if ($upd) {
-      $hip = CMU::Netdb::list_machines($dbh, 'netreg', "machine.ip_address=$ip AND machine.id != " . $ofields{'id'});
+      $hip = CMU::Netdb::list_machines($dbh, 'netreg', "machine.ip_address='$ip' AND machine.id != " . $ofields{'id'});
     } else {
-      $hip = CMU::Netdb::list_machines($dbh, 'netreg', "machine.ip_address=$ip");
+      $hip = CMU::Netdb::list_machines($dbh, 'netreg', "machine.ip_address='$ip'");
     }
     warn "exit 16" if ($debug);
     return ($hip, ['ip_address']) if (!ref ($hip));
@@ -1925,12 +1973,33 @@ sub add_mod_machine_pool {
   }
   delete($$newfields{'machine.created'}) if ($upd);
   
-  $dbh->do("LOCK TABLES machine WRITE, machine AS M1 READ, machine as M2 READ,
-subnet AS S1 READ, subnet AS S2 READ, users as U READ, groups as G READ,
-protections as P read, dns_zone READ, memberships as M READ, subnet READ,
-dns_resource as DR read, _sys_changelog WRITE , _sys_changerec_row WRITE, 
-_sys_changerec_col WRITE, credentials AS C READ");
-  
+  my @locks = (
+               "_sys_changelog",
+               "_sys_changerec_col",
+               "_sys_changerec_row",
+	       "credentials",
+	       "dns_resource",
+	       "dns_zone",
+	       "groups",
+	       "machine",
+	       "memberships",
+	       "protections",
+	       "subnet",
+	       "users",
+	       );
+
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, \@locks);
+  unless($lockres == 1){
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($errcodes{"EDB"}, $lockref);
+  }
+
   $$newfields{'machine.mac_address'} = '' if ($$fields{mode} ne 'reserved');
   
   # verify MAC address uniqueness
@@ -1939,13 +2008,13 @@ _sys_changerec_col WRITE, credentials AS C READ");
     $lmqr .= " AND machine.id != '$upd'" if ($upd > 0);
     my $mcref = CMU::Netdb::list_machines($dbh, 'netreg', $lmqr);
     if (!ref $mcref) {
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       warn "exit 20" if ($debug);
       return ($mcref, ['mac_address']) 
     }
     my $mcc = $#$mcref;
     if ($mcc > 0) {
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       warn "exit 21" if ($debug);
       return ($errcodes{EEXISTS}, ['mac_address']);
     }
@@ -1954,7 +2023,7 @@ _sys_changerec_col WRITE, credentials AS C READ");
   ## verify uniqueness of hostname
   {
     unless(check_host_unique($dbh, $dbuser, $newfields, $upd)) {
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       warn "exit 22" if ($debug);
       return ($errcodes{EEXISTS}, ['host_name']);
     }
@@ -1964,7 +2033,7 @@ _sys_changerec_col WRITE, credentials AS C READ");
   if ($$newfields{'machine.ip_address'} eq '' && $$newfields{'machine.mode'} ne 'reserved') {
     my $newip = find_available_ip($dbh, $newfields);
     if (!ref $newip) {
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       warn "exit 23" if ($debug);
       return ($newip, ['ip_address']);
     }
@@ -1979,7 +2048,7 @@ _sys_changerec_col WRITE, credentials AS C READ");
     @hzones = keys %{CMU::Netdb::list_zone_ref($dbh, $dbuser, 
 					       " dns_zone.name = '$ipc[2].$ipc[1].$ipc[0].in-addr.arpa' ",'GET')};
     if ($#hzones != 0) {
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       warn "exit 24" if ($debug);
       return ($errcodes{EDOMAIN}, ['ip_address']);
     }
@@ -2004,11 +2073,14 @@ _sys_changerec_col WRITE, credentials AS C READ");
     $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'machine', $newfields);
     $warns{insertID} = $CMU::Netdb::primitives::db_insertid;
   }
-  $dbh->do("UNLOCK TABLES");
   
   $warns{host_name} = $$newfields{'machine.host_name'};
   warn "exit 25" if ($debug);
-  return ($res, {'new' => $newfields}) if ($res < 1);
+  if ($res < 1) {
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($res, {'new' => $newfields});
+  }
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($res, \%warns);
 }
 
@@ -2048,6 +2120,13 @@ sub add_machine {
   my $depts = CMU::Netdb::get_departments($dbh, $dbuser, " groups.name = '$dept'", 'ALL', '', 'groups.id');
   return ($errcodes{EPERM}, ['dept']) if (!ref $depts || !defined $$depts{$dept});
   
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
   my ($res, $ref);
   ($res, $ref) = add_mod_machine_static($dbh, $dbuser, $ul, $fields, 0, 0, 0)
     if ($$fields{'mode'} eq 'static');
@@ -2062,7 +2141,10 @@ sub add_machine {
   ($res, $ref) = add_mod_machine_pool($dbh, $dbuser, $ul, $fields, 0, 0, 0)
     if ($$fields{'mode'} eq 'reserved');
   
-  return ($res, $ref) if ($res < 1);
+  if ($res < 1){
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($res, $ref);
+  }
   
   warn  __FILE__, ':', __LINE__, ' :>'.
     "last insert ID: $$ref{insertID}\n" if ($debug >= 2);
@@ -2075,12 +2157,11 @@ sub add_machine {
       $mailstring .= "$key = $fields->{$key}\n";
     }
     &CMU::Netdb::netdb_mail('CMU::Netdb::machines_subnets:add_machine', $mailstring);
+    CMU::Netdb::xaction_rollback($dbh);
     return (0, ['insert_id']);
   }
   
   # done. now add the initial permissions
-  # FIXME: if we have transactions, this should be included and a rollback
-  # performed if the machine isn't associated with one user
   my $success = 0;
   my $addret;
   # set the dept
@@ -2129,19 +2210,10 @@ sub add_machine {
   }
   # in this case, we need to rollback the machine and tell the user
   if ($success < 1) {
-    # find the version field. grr. this sucks.
-    my $version = get_machine_version($dbh, 'netreg', 
-				      " machine.id = '$$ref{insertID}' ");
-    # since we're running this as netreg, start the changelog as the real user first.
-    CMU::Netdb::primitives::changelog_id($dbh, $dbuser);
-    my $dm = CMU::Netdb::delete_machine($dbh, 'netreg', $$ref{insertID}, $version);
-    if ($dm == 1) {
-      $$ref{'delete_machine'} = "Machine removed.";
-    }else{
-      $$ref{'delete_machine'} = "Error deleting machine: ".$errmeanings{$dm}; # FIXME send mail?
-    }
+    CMU::Netdb::xaction_rollback($dbh);
     return (0, ['protections']);
   }
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return (1, $ref);
 }
 
@@ -2189,13 +2261,11 @@ sub add_subnet {
   }
   
   my ($nb, $nn) = ($$newfields{'subnet.base_address'}, $$newfields{'subnet.network_mask'});
+  my $newnet = $nb . '/' . $nn;
   $query = "
 SELECT COUNT(subnet.id)
 FROM subnet
-WHERE ('$nb' BETWEEN base_address AND (base_address | (~network_mask & 
-$IPSuperMask)))
-   OR (('$nb' | (~'$nn' & $IPSuperMask)) BETWEEN base_address AND 
-  (base_address | (~network_mask & $IPSuperMask))) ";
+WHERE base_address >>= '$newnet' OR '$newnet' >>= base_address";
 
 #This is checking to see if a subnet already occupies that range
 
@@ -2222,7 +2292,16 @@ $IPSuperMask)))
   }
   
   
-  my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'subnet', $newfields);    if ($res < 1) {
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
+  my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'subnet', $newfields);
+  if ($res < 1) {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($res, []);
   }
   my %warns = ('insertID' => $CMU::Netdb::primitives::db_insertid);
@@ -2247,6 +2326,8 @@ $IPSuperMask)))
       warn __FILE__, ':', __LINE__, ' :>'.
 	"$Pr failure adding protections entries for ".
 	  "subnet/$warns{insertID}: ".join(',', @$AErrf)."\n";
+      CMU::Netdb::xaction_rollback($dbh);
+      return($ARes, $AErrf);
     }
 
     my @modes_to_add = ( ['static','required'],
@@ -2271,11 +2352,13 @@ $IPSuperMask)))
 	warn __FILE__, ':', __LINE__, ' :>'.
 	"failure adding mode entries for ".
 	  "subnet/$warns{insertID}: ".join(',', @$AErrf)."\n";
+	CMU::Netdb::xaction_rollback($dbh);
+	return($ARes, $AErrf);
       } 
     }
   }
   
-  
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($res, \%warns);
 }
 
@@ -2530,8 +2613,16 @@ sub add_subnet_registration_mode {
     $$newfields{"subnet_registration_modes.$key"} = $$fields{$key};
   }
   
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
   my $res = CMU::Netdb::primitives::add($dbh, $dbuser, 'subnet_registration_modes', $newfields);
   if ($res < 1) {
+    CMU::Netdb::xaction_rollback($dbh);
     return ($res, []);
   }
   my %warns = ('insertID' => $CMU::Netdb::primitives::db_insertid);
@@ -2546,9 +2637,12 @@ sub add_subnet_registration_mode {
       warn __FILE__, ':', __LINE__, ' :>'.
 	"$Pr failure adding protections entries for ".
 	  "subnet_registration_modes/$warns{insertID}: ".join(',', @$AErrf)."\n";
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($ARes, $AErrf);
     }
   }
 
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($res, \%warns);
 }
 
@@ -2696,6 +2790,13 @@ sub modify_machine {
     my $ab_ret = ab_del_mac($ofields{'ip_address_subnet'}, $ofields{'mac_address'});
   }
 
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
   $hnChange = 1 if ($$fields{'host_name'} ne $ofields{host_name});
   warn  __FILE__, ':', __LINE__, ' :>'.
     ">>> '$$fields{'host_name'}' '$ofields{host_name}'\n" if ($debug >= 2);
@@ -2719,6 +2820,7 @@ sub modify_machine {
 	"After type-specific (".$$fields{'mode'}.
 	  ") add_mod_machine, returning $res";
 
+    CMU::Netdb::xaction_rollback($dbh);
     return ($res, $ref);
   }
 
@@ -2728,18 +2830,32 @@ sub modify_machine {
     # FIXME not logging for now, since its just matching the hostname change thats
     # logged elsewhere -vitroth
     my $sth = $dbh->prepare("UPDATE dns_resource SET name = '$$ref{host_name}' WHERE owner_type = 'machine' AND owner_tid = '$id' AND type != 'CNAME' AND type != 'ANAME'");
-    return ($errcodes{EMACHCASCADE}, ['dns_resources']) if (!$sth->execute());
+    if (!$sth->execute()){
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($errcodes{EMACHCASCADE}, ['dns_resources']);
+    }
     $sth->finish();
     $sth = $dbh->prepare("UPDATE dns_resource SET rname = '$$ref{host_name}' WHERE owner_type = 'machine' AND owner_tid = '$id' AND (type = 'CNAME' OR type = 'ANAME')");
-    return ($errcodes{EMACHCASCADE}, ['dns_resources']) if (!$sth->execute());
+    if (!$sth->execute()){
+      CMU::Netdb::xaction_rollback($dbh);
+      return ($errcodes{EMACHCASCADE}, ['dns_resources']);
+    }
     $sth->finish();
   }
   
   # update department
-  if ((defined $dept) && ($dept ne '')) {
-    $dbh->do("LOCK TABLES protections WRITE, machine READ, groups READ, 
-_sys_changelog WRITE , _sys_changerec_row WRITE, _sys_changerec_col WRITE, 
-credentials AS C READ");
+  my ($lockres, $lockref) = CMU::Netdb::lock_tables($dbh, ['protections',
+							   'machine',
+							   'groups',
+							   '_sys_changelog',
+							   '_sys_changerec_row',
+							   '_sys_changerec_col',
+							   'credentials']);
+  
+  unless($lockres == 1){
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($errcodes{"EDB"}, $lockref);
+  }
     $query = "
 SELECT protections.id
   FROM protections, machine, groups
@@ -2756,7 +2872,7 @@ SELECT protections.id
       warn  __FILE__, ':', __LINE__, ' :>'.
 	"CMU::Netdb::machines_subnets::modify_machine:: Unknown error\n$DBI::errstr\n" if ($debug);
       $$ref{dept} = 'DBI failure';
-      $dbh->do("UNLOCK TABLES");
+      CMU::Netdb::xaction_rollback($dbh);
       return ($res, $ref);
     }    
     my @row = $sth->fetchrow_array();
@@ -2778,10 +2894,13 @@ SELECT protections.id
 	}
       }
       $nres = $dbh->do("UPDATE protections SET identity = -1*$$depts{$dept} WHERE id = '$row[0]'");
+      if($nres != 1){
+	$$ref{dept} = 'DBI Failure';
+	CMU::Netdb::xaction_rollback($dbh);
+	return ($nres, $ref);
+      }
     }
-    $$ref{dept} = 'DBI Failure' if ($nres != 1);
-    $dbh->do("UNLOCK TABLES");
-  }
+
   warn  __FILE__, ':', __LINE__, ' :>'.
     "zone updates: $oldZoneFw; $oldZoneRv\n" if ($debug >= 2);
   CMU::Netdb::force_zone_update($dbh, $oldZoneFw);
@@ -2799,6 +2918,7 @@ SELECT protections.id
     }
   }
 
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($res, $ref);
 }
 
@@ -3387,6 +3507,13 @@ sub delete_machine {
   my $resources = CMU::Netdb::list_dns_resources($dbh,"netreg","dns_resource.owner_type = 'machine' AND dns_resource.owner_tid = $id");
   return ($resources, ['dns_resources']) if (!ref $resources);
 
+  my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
+  if ($xres == 1){
+    $xref = shift @{$xref};
+  }else{
+    return ($xres, $xref);
+  }
+
   ($result, $dref) = CMU::Netdb::primitives::delete
     ($dbh, $dbuser, 'machine', $id, $version);
   
@@ -3400,19 +3527,32 @@ sub delete_machine {
     if ($sth->rows() == 0) {
       warn  __FILE__, ':', __LINE__, ' :>'.
 	"CMU::Netdb::machines_subnets::delete_machine: id/version were stale\n" if ($debug);
+      CMU::Netdb::xaction_rollback($dbh);
       return ($errcodes{"ESTALE"}, ['stale']);
     } else {
+      CMU::Netdb::xaction_rollback($dbh);
       return ($result, $dref);
     }
   }
   my $result2 = CMU::Netdb::delete_protection_tid($dbh, $dbuser, 'machine', $id);
-  # FIXME error checking here? 
-  
+  unless ($result2 == 1){
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($result2, []);
+  }
+
   warn  __FILE__, ':', __LINE__, ' :>'.
     "zone updates: fw $oldZoneFw; rv $oldZoneRv\n" if ($debug >= 2);;
 
-  CMU::Netdb::force_zone_update($dbh, $oldZoneFw);
-  CMU::Netdb::force_zone_update($dbh, $oldZoneRv);
+  $result2 = CMU::Netdb::force_zone_update($dbh, $oldZoneFw);
+  unless ($result2 == 1){
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($result2, []);
+  }
+  $result2 = CMU::Netdb::force_zone_update($dbh, $oldZoneRv);
+  unless ($result2 == 1){
+    CMU::Netdb::xaction_rollback($dbh);
+    return ($result2, []);
+  }
   
  if ($#$resources) {
     my $resmap = CMU::Netdb::makemap($resources->[0]);
@@ -3420,11 +3560,16 @@ sub delete_machine {
     foreach my $r (@$resources) {
       warn Data::Dumper->Dump([$r, $resmap], ['resource', 'resmap']);
       warn  __FILE__, ':', __LINE__, ' :>'.
-        "zone update for dns_resource : $r->[$resmap->{'dns_resource.name_zone'}]" if ($debug >= 2);;
-      CMU::Netdb::force_zone_update($dbh, $r->[$resmap->{'dns_resource.name_zone'}]);
+	  "zone update for dns_resource : $r->[$resmap->{'dns_resource.name_zone'}]" if ($debug >= 2);;
+      $result2 = CMU::Netdb::force_zone_update($dbh, $r->[$resmap->{'dns_resource.name_zone'}]);
+      unless ($result2 == 1){
+	CMU::Netdb::xaction_rollback($dbh);
+	return ($result2, []);
+      }
     }
   }
 
+  CMU::Netdb::xaction_commit($dbh, $xref);
   return ($result, []);
   
 }
@@ -3739,6 +3884,8 @@ sub list_vlan_subnet_presences {
 ## WARNING: changing the table aliases in the queries may require
 ## changes to the locking semantics of functions that use find_available_ip
 
+## Big Fat Giant TODO:  this will require some major reworking to handle IPv6
+
 sub find_available_ip {
   my ($dbh, $fields) = @_;
   my ($query, $sth, @row, $base, $last, $ip);
@@ -3757,10 +3904,12 @@ FROM subnet AS S1, machine as M1 LEFT JOIN machine as M2
   ON M1.ip_address+1 = M2.ip_address 
 WHERE M1.ip_address_subnet = '$$fields{'machine.ip_address_subnet'}'
   AND M2.ip_address IS NULL 
-  AND M1.ip_address != 0
+  AND M1.ip_address <> '0.0.0.0'
   AND M1.ip_address_subnet = S1.id
-  AND M1.ip_address > (S1.base_address + $BASE_SAVE)
-  AND M1.ip_address < ((S1.base_address | (~S1.network_mask & $IPSuperMask)) - ($TOP_SAVE + 1))
+  AND M1.ip_address > cast(host(S1.base_address) as inet) + $BASE_SAVE
+  AND M1.ip_address < cast(host(broadcast(S1.base_address)) as inet) - ($TOP_SAVE + 1)
+  AND M1.ip_address <> cast(host(S1.base_address) as inet)
+  AND M1.ip_address <> cast(host(broadcast(S1.base_address)) as inet)
 ORDER BY M1.ip_address LIMIT 1
 ";
     
@@ -3774,26 +3923,16 @@ ORDER BY M1.ip_address LIMIT 1
   @row = $sth->fetchrow_array();
   if (defined $row[0] && $row[0] ne '') {
     $ip = $row[0];
-    my $hzones = CMU::Netdb::list_subnets_ref($dbh, "netreg", 
-					      " ((base_address | ".
-					      " (~network_mask&$IPSuperMask))".
-					      " ='$ip' OR base_address = '$ip')", 'subnet.name');
+
+    # The address isn't a subnet or broadcast address.
+    # But is it in the right subnet?
+    my $hzones = CMU::Netdb::list_subnets_ref($dbh, "netreg", " base_address >> '$ip' ", 'subnet.name');
     return ($hzones, ['ip_address']) if (!ref $hzones);
-    my $hzk = keys %$hzones;
-    if (!($hzk >= 1)) {
-      # The address isn't a subnet or broadcast address.
-      # But is it in the right subnet?
-      $hzones = CMU::Netdb::list_subnets_ref($dbh, "netreg", " (base_address = ('$ip' & network_mask)) ", 'subnet.name');
-      return ($hzones, ['ip_address']) if (!ref $hzones);
-      my @hza = keys %$hzones;
-      $hzk = @hza;
-      if (($hzk == 1) && ($$fields{"machine.ip_address_subnet"} eq $hza[0])) {
-	warn __FILE__, ':', __LINE__, ' :>', "Quick IP Lookup found ".CMU::Netdb::long2dot($ip)."\n" if ($debug >= 2);
-	return [$ip];
-      } else {
-	warn  __FILE__, ':', __LINE__, ' :>'.
-	  "$ip is in the wrong subnet\n" if ($debug >= 2);
-      }
+    my @hza = keys %$hzones;
+    my $hzk = @hza;
+    if (($hzk == 1) && ($$fields{"machine.ip_address_subnet"} eq $hza[0])) {
+      warn __FILE__, ':', __LINE__, ' :>', "Quick IP Lookup found ".CMU::Netdb::long2dot($ip)."\n" if ($debug >= 2);
+      return [$ip];
     } else {
       warn  __FILE__, ':', __LINE__, ' :>'.
 	"$ip is a network or broadcast address\n" if ($debug >= 2);
@@ -3802,9 +3941,15 @@ ORDER BY M1.ip_address LIMIT 1
   
   # no IP for us... yet
   $query = "
-SELECT S1.base_address, (S1.base_address | (~network_mask & $IPSuperMask))
-FROM subnet AS S1 WHERE id = '$$fields{'machine.ip_address_subnet'}'
-";
+SELECT 
+  CASE WHEN '$l'::inet > host(S1.base_address + 1)::inet THEN '$l'::inet
+       ELSE host(S1.base_address + 1)::inet
+  END,
+  CASE WHEN '$h'::inet <  host(broadcast(S1.base_address) - 1)::inet THEN '$h'::inet
+       ELSE host(broadcast(S1.base_address) - 1)::inet
+  END
+FROM subnet AS S1 WHERE id = '" . $$fields{'machine.ip_address_subnet'} . "'";
+
     
     warn  __FILE__, ':', __LINE__, ' :>'.
       "find_available_ip secondary query: $query\n" if ($debug >= 2);
@@ -3824,8 +3969,7 @@ FROM subnet AS S1 WHERE id = '$$fields{'machine.ip_address_subnet'}'
   $query = "
 SELECT M1.ip_address
 FROM machine as M1
-WHERE M1.ip_address_subnet = '$$fields{'machine.ip_address_subnet'}'
-";
+WHERE M1.ip_address_subnet = '" . $$fields{'machine.ip_address_subnet'} . "'";
     
     warn  __FILE__, ':', __LINE__, ' :>'.
       "find_available_ip subnet usage query: $query\n" if ($debug >= 2);
@@ -3840,19 +3984,20 @@ WHERE M1.ip_address_subnet = '$$fields{'machine.ip_address_subnet'}'
   }
   $sth->finish;
   #  $last = CMU::Netdb::dot2long(CMU::Netdb::calc_bcast(CMU::Netdb::long2dot($base), CMU::Netdb::long2dot($last)))-3;
-  $last = $last-$TOP_SAVE;
-  $base = "0".$base;
-  $base += $BASE_SAVE + 1;
-  while($base < $last) {
+  # TODO - reimplement the SAVE buffers
+  #$last = $last-$TOP_SAVE;
+  #$base = "0".$base;
+  #$base += $BASE_SAVE + 1;
+  my $checkrange = new Net::IP("$base - $last");
+  do {
     warn  __FILE__, ':', __LINE__, ' :>'.
-      "$base\n" if ($debug >= 3);
-    if (!defined $IPused{$base}) {
-      warn __FILE__, ':', __LINE__, ' :>', "Secondary IP Lookup found ".CMU::Netdb::long2dot($base)."\n" if ($debug >= 2);
-
-      return [$base];
-    }
-    $base++;
-  }
+	" checking ", $checkrange->ip, "\n" if ($debug >= 3);
+    if (!defined $IPused{$checkrange->ip}) {
+      warn __FILE__, ':', __LINE__, ' :>', "Secondary IP Lookup found ". $checkrange->ip . "\n" if ($debug >= 2);
+ 
+      return [$checkrange->ip];
+     }
+  } while (++$checkrange);
   
   # nope.. they're all taken. send off some email to the netreg folks
   # FIXME 8: send mail that we're out of IPs on this subnet 
@@ -4151,13 +4296,20 @@ sub register_ips {
   return (1, \@Messages);
 }
 
+# TODO: Major IPv6 warning:
+#
+# WTF are we supposed to do with these two functions on IPv6?  We sure
+# as heck don't want to wrangle up and return on the order of 2^64
+# entries in a single giant array - assuming perl even supports arrays
+# that bloody large..
+
 sub subnets_get_free_ip_list {
   my ($dbh, $dbuser, $sid) = @_;
   
   my $query;
   my $sth;
   $query = "
-  SELECT S1.base_address, (S1.base_address | (~network_mask & $IPSuperMask))
+SELECT S1.base_address, (S1.base_address | (~network_mask & $IPSuperMask))
 FROM subnet AS S1 WHERE id = '$sid' ";
     
     $sth = $dbh->prepare($query);
@@ -4173,8 +4325,8 @@ FROM subnet AS S1 WHERE id = '$sid' ";
   }
   
   $sth->finish;
-  my $base = $row[0];
-  my $last = $row[1];
+  my $base = new Net::IP($row[0]);
+  my $last = new Net::IP($row[1]);
   warn  __FILE__, ':', __LINE__, ' :>'.
     "b/l $base/$last\n" if ($debug);
   
@@ -4182,7 +4334,7 @@ FROM subnet AS S1 WHERE id = '$sid' ";
 SELECT M1.ip_address
 FROM machine as M1
 WHERE M1.ip_address_subnet = '$sid'
-  AND M1.ip_address != 0 ";
+  AND M1.ip_address <> '0.0.0.0' ";
     
     $sth = $dbh->prepare($query);
   if (!$sth->execute()) {
@@ -4197,15 +4349,22 @@ WHERE M1.ip_address_subnet = '$sid'
   $sth->finish;
   
   my @Unused;
-  my $ip = $base;
-  while($ip++ <= $last) {
-    push(@Unused, $ip) unless (defined $IPused{$ip} ||
-			       ($ip-$base <= 3) ||
-			       ($last-$ip <= 3));
-  }
+  my $ip = new Net::IP("$base - $last");
+
+  do {
+    push(@Unused, $ip->ip) unless (defined $IPused{$ip->ip} ||
+				   $ip->bincomp('lt', $base) ||
+				   $ip->bincomp('gt', $last));
+  } while (++$ip);
   
   return \@Unused;
 }
+
+# TODO: IPv6:
+# All of the AM functions will have to be completely overhauled, if
+# not obsoleted completely, for IPv6.  Once again, subnets are so
+# bloody large we have to do sparse operations, rather than trying to
+# represent the whole damn thing in-memory.
 
 sub subnets_am_lowfirst {
   my ($dbh, $dbuser, $rAvailableIPs, $Num) = @_;
