@@ -300,13 +300,13 @@ sub subnets_print_subnet {
   CMU::WebInt::generic_tprint($ENV{SCRIPT_NAME}, $ruRef, 
 		 ['subnet.name', 'subnet.abbreviation'],
 		 [\&CMU::WebInt::subnets::subnets_cb_base_address,
-		  \&CMU::WebInt::subnets::subnets_cb_network_mask], '',
+		  ], '',
 		 'sub_main', 'op=sub_info&sid=',
 		 \%subnet_pos, 
 		 \%CMU::Netdb::structure::subnet_printable,
 			      'subnet.name', 'subnet.id', 'sort', 
 			      ['subnet.name', 'subnet.abbreviation', 'subnet.base_address',
-			       'subnet.network_mask']);
+			       ]);
   
   return 1;
 }
@@ -408,20 +408,24 @@ sub subnets_view {
 CMU::WebInt::printPossError(defined $errors->{'base_address'}, $subnet_p{'subnet.base_address'}, 1, 'subnet.base_address').
 CMU::WebInt::printPossError(defined $errors->{'network_mask'}, $subnet_p{'subnet.network_mask'}, 1, 'subnet.network_mask').
 "</tr>";
-  print "<tr><td>".CMU::WebInt::printVerbose('subnet.base_address', $verbose).
-  $q->textfield(-name=> 'base_address', -accesskey => 'b',
-		-value=>CMU::Netdb::long2dot($sdata[$subnet_pos{'subnet.base_address'}]))."</td><td>".CMU::WebInt::printVerbose('subnet.network_mask', $verbose).
-  $q->textfield(-name=> 'network_mask', -accesskey => 'n',
-		-value=>CMU::Netdb::long2dot($sdata[$subnet_pos{'subnet.network_mask'}]))."</td></tr>\n";
 
-  # network summary, vlan number
-  print "<tr>".CMU::WebInt::printPossError(0, "Network Summary", 1);
-#.CMU::WebInt::printPossError(0,$subnet_p{'subnet.vlan'}, 1, 'subnet.vlan').
-  print "</tr><tr><td>Range of addresses: ".CMU::Netdb::long2dot($sdata[$subnet_pos{'subnet.base_address'}])." - ".
-    CMU::Netdb::calc_bcast(CMU::Netdb::long2dot($sdata[$subnet_pos{'subnet.base_address'}]),
-			   CMU::Netdb::long2dot($sdata[$subnet_pos{'subnet.network_mask'}]))."</td></tr>\n";
-#<td>".CMU::WebInt::printVerbose('subnet.vlan',$verbose).
-#  $q->textfield(-name=>'vlan', -accesskey => 'v', -value=>$sdata[$subnet_pos{'subnet.vlan'}])."</td></tr>\n";
+  my ($base, $mask) = split('/', $sdata[$subnet_pos{'subnet.base_address'}]);
+
+  print "<tr><td>".CMU::WebInt::printVerbose('subnet.base_address', $verbose).
+   $q->textfield(-name=> 'base_address', -accesskey => 'b',
+		-value=>$base)."</td><td>".CMU::WebInt::printVerbose('subnet.network_mask', $verbose).
+   $q->textfield(-name=> 'network_mask', -accesskey => 'n',
+		 -value=>$mask)."</td></tr>\n";
+
+### TODO:  fix this up to work again
+###  # network summary, vlan number
+###  print "<tr>".CMU::WebInt::printPossError(0, "Network Summary", 1);
+####.CMU::WebInt::printPossError(0,$subnet_p{'subnet.vlan'}, 1, 'subnet.vlan').
+###  print "</tr><tr><td>Range of addresses: ".CMU::Netdb::long2dot($sdata[$subnet_pos{'subnet.base_address'}])." - ".
+###    CMU::Netdb::calc_bcast(CMU::Netdb::long2dot($sdata[$subnet_pos{'subnet.base_address'}]),
+###			   CMU::Netdb::long2dot($sdata[$subnet_pos{'subnet.network_mask'}]))."</td></tr>\n";
+###<td>".CMU::WebInt::printVerbose('subnet.vlan',$verbose).
+###  $q->textfield(-name=>'vlan', -accesskey => 'v', -value=>$sdata[$subnet_pos{'subnet.vlan'}])."</td></tr>\n";
 
   # expire static, expire dynamic
 print "
@@ -1540,8 +1544,7 @@ sub subnets_view_share {
 
   CMU::WebInt::generic_tprint($url, $ssref, 
 		 ['subnet.name'],
-		 [\&CMU::WebInt::subnets::subnets_cb_base_address,
-		  \&CMU::WebInt::subnets::subnets_cb_network_mask],
+		 [\&CMU::WebInt::subnets::subnets_cb_base_address],
 #		  \&CMU::WebInt::subnets::subnets_cb_delete_share], '',
 		  '', '', 'op=sub_info&sid=', \%subnet_pos,
 		  \%CMU::Netdb::structure::subnet_printable, 'subnet.name', 
@@ -1561,12 +1564,12 @@ sub subnets_view_share {
 #   - any additional keys for the refresh (i.e. op=search)
 #   - the key to use for the 'start' parameter
 sub subnets_print_shares {
-  my ($user, $dbh, $q, $where, $url, $oData, $skey) = @_;
+  my ($user, $dbh, $q, $where, $cwhere, $url, $oData, $skey) = @_;
   my ($start, $ctRow, $ruRef, $defitems, $i, @tarr, $out, $vres, $maxPages);
 
   $start = (CMU::WebInt::gParam($q, $skey) eq '') ? 0 : CMU::WebInt::gParam($q, $skey);
 
-  $ctRow = CMU::Netdb::primitives::count($dbh, $user, 'subnet_share', $where);
+  $ctRow = CMU::Netdb::primitives::count($dbh, $user, 'subnet_share', $cwhere);
   
   return $ctRow if (!ref $ctRow);
 
