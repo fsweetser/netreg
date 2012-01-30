@@ -1401,7 +1401,7 @@ sub mach_view {
       map { @cdept = ($_->[1],'') if ($_->[1] =~ /^dept:/); } @$cdref;
     }
 
-    $cdref = CMU::Netdb::list_groups($dbh, $user, "groups.name=\"$cdept[0]\"");
+    $cdref = CMU::Netdb::list_groups($dbh, $user, "groups.name='$cdept[0]'");
     if (!ref $cdref) {
       @cdept = ('[error]','[Unable to determine current affiliation]');
       &CMU::WebInt::admin_mail('machines.pm:mach_view', 'WARNING',
@@ -2142,7 +2142,7 @@ sub mach_expire_list {
   print &CMU::WebInt::subHeading("Expiring Machines", CMU::WebInt::pageHelpLink('machine'));
 
   $res = mach_print_expire_machines($user, $dbh, $q, $gwhere, $grp,
-				    " machine.expires != 0 ".
+				    " machine.expires IS NULL ".
 				    CMU::Netdb::verify_orderby($sort),
 				    $url, "sort=$sort&grp=$presentID", 'start', 'mach_expire_list');
 
@@ -2677,7 +2677,7 @@ sub mach_search {
 
   # host_name_zone
   {
-    my $fwz = CMU::Netdb::list_zone_ref($dbh, $user, "type like \"fw-%\"");
+    my $fwz = CMU::Netdb::list_zone_ref($dbh, $user, "type like 'fw-%'");
     if (ref $fwz) {
       print "<tr>".CMU::WebInt::printPossError
 	(0, 
@@ -2700,7 +2700,7 @@ sub mach_search {
 
   # ip_address_zone
   {
-    my $rvz = CMU::Netdb::list_zone_ref($dbh, $user, "type like \"rv-%\"");
+    my $rvz = CMU::Netdb::list_zone_ref($dbh, $user, "type like 'rv-%'");
     if (ref $rvz) {
       print "<tr>".CMU::WebInt::printPossError(0, $CMU::Netdb::structure::machine_printable{'machine.ip_address_zone'}, 1, 'ip_address_zone')."</td><td>";
       my @rvk = sort { rev_name($$rvz{$a}) <=> rev_name($$rvz{$b}) } keys %$rvz;
@@ -2901,7 +2901,7 @@ sub mach_s_exec {
 
   # ip_address
   if (CMU::WebInt::helper::gParam($q, 'ipt') eq 'is') {
-    push(@q, 'ip_address = '.CMU::Netdb::dot2long(CMU::WebInt::helper::gParam($q, 'ip_address')))
+    push(@q, 'ip_address = \''.CMU::Netdb::dot2long(CMU::WebInt::helper::gParam($q, 'ip_address')).'\'')
       if (CMU::WebInt::helper::gParam($q, 'ip_address') ne '');
   }elsif(CMU::WebInt::helper::gParam($q, 'ipt') eq 'btw') {
     unless (CMU::WebInt::helper::gParam($q, 'ip1') eq '' || CMU::WebInt::helper::gParam($q, 'ip2') eq '') {
@@ -2911,15 +2911,15 @@ sub mach_s_exec {
 	$a = $b;
 	$b = $c;
       }
-      push(@q, "ip_address >= $a and ip_address <= $b");
+      push(@q, "ip_address >= '$a' and ip_address <= '$b'");
     }
   }
   # host_name
   if (CMU::WebInt::helper::gParam($q, 'host_name') ne '') {
     if (CMU::WebInt::helper::gParam($q, 'host_name') =~ /\%/) {
-      push(@q, 'host_name like '.$dbh->quote(CMU::WebInt::helper::gParam($q, 'host_name')));
+      push(@q, 'host_name like "'.uc(CMU::WebInt::helper::gParam($q, 'host_name')).'"');
     }else{
-      push(@q, 'host_name like '.$dbh->quote('%'.CMU::WebInt::helper::gParam($q, 'host_name').'%'));
+      push(@q, 'host_name like \'%'.uc(CMU::WebInt::helper::gParam($q, 'host_name')).'%\'');
     }
   }
 
