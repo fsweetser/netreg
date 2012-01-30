@@ -1519,12 +1519,28 @@ if ($$newfields{'dns_zone.type'} =~ /-toplevel$/) {
   $$newfields{'dns_zone.parent'} = $r;
 }
 
+# Check if there are any machine or dns_resource records that would be orphaned
+# if the domain is renamed, and refuse to update if any exist.
+
+  unless ($$newfields{'dns_zone.name'} eq $$fields{'name'}){
+      my $ml = CMU::Netdb::list_machines($dbh, 'netreg', " machine.host_name_zone = '$id' ");
+      if(ref $ml and defined $ml->[1]){
+	  return ($CMU::Netdb::errcodes{EINUSE}, ['machine.host_name_zone']);
+      }
+
+      my $drsl = CMU::Netdb::list_dns_resources($dbh, 'netreg', " rname like '%." . $ofields{'name'} . "' ");
+      if(ref $drsl and defined $drsl->[1]){
+	  return ($CMU::Netdb::errcodes{EINUSE}, ['dns_resource.rname']);
+      }
+  }
+
   my ($xres, $xref) = CMU::Netdb::xaction_begin($dbh);
   if ($xres == 1){
     $xref = shift @{$xref};
   }else{
     return ($xres, $xref);
   }
+
 
 $result = CMU::Netdb::primitives::modify($dbh, $dbuser, 'dns_zone', $id, $version, $newfields);
 
