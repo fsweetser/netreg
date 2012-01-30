@@ -364,7 +364,7 @@ sub verify_limit {
   my $RunP = verify_integer_err_default($run);
   $StP = 0 if (getError($StP) != 1);
   $RunP = 0 if (getError($RunP) != 1);
-  return " LIMIT $StP, $RunP ";  
+  return " LIMIT $RunP OFFSET $StP ";
 }
 
 # Returns a valid ORDER BY statement
