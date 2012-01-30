@@ -435,7 +435,7 @@ require Exporter;
 			   'subnet_share.version' => 'Last Updated');
 @subnet_fields = 
   ("subnet.id","subnet.name","subnet.abbreviation","subnet.base_address",
-   "subnet.network_mask","subnet.dynamic","subnet.expire_static",
+   "subnet.dynamic","subnet.expire_static",
    "subnet.expire_dynamic","subnet.share","subnet.flags","subnet.version",
    "subnet.default_mode",
    "subnet.purge_interval", "subnet.purge_notupd", "subnet.purge_notseen",
@@ -450,7 +450,6 @@ require Exporter;
    'subnet.name' => 'Subnet Name',
    'subnet.abbreviation' => 'Abbreviation',
    'subnet.base_address' => 'Base Address',
-   'subnet.network_mask' => 'Network Mask',
    'subnet.dynamic' => 'Dynamics',
    'subnet.expire_static' => 'Expire static',
    'subnet.expire_dynamic' => 'Expire dynamic',
