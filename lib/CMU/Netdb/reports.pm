@@ -187,15 +187,15 @@ sub rep_subnet_utilization {
   
   my $query =<<END_SELECT;
 SELECT subnet.id, subnet.name, count(machine.id) AS machinecount, 
-  (((base_address |(~network_mask& (0x100000000-1))))-base_address + 1) AS totalnumber,
+  (host(broadcast(base_address))::inet - base_address - 2) AS totalnumber,
   machine.mode
   FROM machine, subnet
  WHERE ip_address_subnet = subnet.id
    AND NOT FIND_IN_SET('no_dhcp', subnet.flags)
    AND NOT FIND_IN_SET('delegated', subnet.flags)
-   AND (machine.ip_address != 0 OR machine.mode = 'dynamic')
+   AND (machine.ip_address != '0.0.0.0' OR machine.mode = 'dynamic')
    AND subnet.name NOT LIKE '%QuickReg'
-GROUP BY subnet.id, machine.mode
+GROUP BY subnet.id, subnet.name, machine.mode, subnet.base_address
 END_SELECT
   
   my %subnets;
@@ -242,7 +242,7 @@ SELECT COUNT(dns_resource.id) AS CT, machine.host_name, machine.id
   FROM machine, dns_resource
  WHERE dns_resource.type = 'CNAME'
    AND machine.host_name = dns_resource.rname
-GROUP BY (machine.host_name) ORDER BY CT DESC
+GROUP BY machine.host_name, machine.id ORDER BY CT DESC
 END_SELECT
   
   my %cnames;
@@ -270,7 +270,7 @@ SELECT C.authid, C.description, COUNT(M.id) AS CT
   WHERE U.id = P.identity
     AND P.tname = 'machine'
     AND P.tid = M.id
-GROUP BY C.authid ORDER BY CT DESC
+ GROUP BY C.authid, C.description ORDER BY CT DESC
 END_SELECT
 
   my %stat;
@@ -729,7 +729,7 @@ END_SELECT2
           $query .= "  WHERE\n";
           $query .= "       c1.changerec_row = c2.changerec_row and\n" if ((defined $ind) && ($ind ne ''));
           $query .= "       c2.changerec_row = r1.id and\n";
-          $query .= "   r1.tname = \"$extra\" and\n";
+          $query .= "   r1.tname = '$extra' and\n";
           $query .= "       c1.name = '$i' and\n" if ((defined $ind) && ($ind ne ''));
           $query .= "   (c1.data = '$table') and\n" if ((defined $ind) && ($ind ne ''));
           $query .= "   c2.name = '$j' and\n";
@@ -742,7 +742,7 @@ END_SELECT2
           $query .= "  WHERE\n";
           $query .= "       c1.changerec_row = c2.changerec_row and\n" if ((defined $ind) && ($ind ne ''));
           $query .= "       c2.changerec_row = r1.id and\n";
-          $query .= "   r1.tname = \"$extra\" and\n";
+          $query .= "   r1.tname = '$extra' and\n";
           $query .= "       c1.name = '$i' and\n" if ((defined $ind) && ($ind ne ''));
           $query .= "   (c1.data = '$table') and\n" if ((defined $ind) && ($ind ne ''));
           $query .= "   c2.name = '$j' and\n";
@@ -755,7 +755,7 @@ END_SELECT2
           $query .= "  WHERE\n";
           $query .= "       c1.changerec_row = c2.changerec_row and\n" if ((defined $ind) && ($ind ne ''));
           $query .= "       c2.changerec_row = r1.id and\n";
-          $query .= "   r1.tname = \"$extra\" and\n";
+          $query .= "   r1.tname = '$extra' and\n";
           $query .= "       c1.name = '$i' and\n" if ((defined $ind) && ($ind ne ''));
           $query .= "   (c1.previous = '$table') and\n" if ((defined $ind) && ($ind ne ''));
           $query .= "   c2.name = '$j' and\n";
@@ -768,7 +768,7 @@ END_SELECT2
           $query .= "  WHERE\n";
           $query .= "       c1.changerec_row = c2.changerec_row and\n" if ((defined $ind) && ($ind ne ''));
           $query .= "       c2.changerec_row = r1.id and\n";
-          $query .= "   r1.tname = \"$extra\" and\n";
+          $query .= "   r1.tname = '$extra' and\n";
           $query .= "       c1.name = '$i' and\n" if ((defined $ind) && ($ind ne ''));
           $query .= "   (c1.previous = '$table') and\n" if ((defined $ind) && ($ind ne ''));
           $query .= "   c2.name = '$j' and\n";
