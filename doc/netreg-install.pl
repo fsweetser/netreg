@@ -3,11 +3,13 @@
 require 5.005_03;
 
 use strict;
+use warnings;
 use File::Path;
 use File::Basename;
 use File::Spec;
 use Data::Dumper;
-#use CPAN;
+use DBI;
+use IO::Prompt;
 
 my $LOG_FILE = "netreg-install.log";
 my $LOG_CONS = 1;
@@ -17,44 +19,13 @@ my $NR_WHEEL = 'sudo';
 my $CONFIG_MODE = '';
 my $NRHOME = '/home/netreg';
 
-my @REQ_PERL_MODULES = qw/DBI DBD::mysql Convert::BER Crypt::DES
-  Data::Compare Digest::HMAC Digest::SHA1 IO::Stty IO::Tty Expect
-  Net::DNS SNMP Net::SNMP Config::General/;
+#my @REQ_PERL_MODULES = qw/DBI DBD::mysql Convert::BER Crypt::DES
+#  Data::Compare Digest::HMAC Digest::SHA1 IO::Stty IO::Tty Expect
+#  Net::DNS SNMP Net::SNMP Config::General/;
 main();
 exit(0);
 
 
-## *********************************************************************
-
-
-# Question to ask (like "Accept?")
-# Default response (or blank)
-# Accept no response? 1 if yes (default counts as response if available)
-sub getUserInput {
-  my ($question, $def, $req) = @_;
-
- GUI_START:
-  print $question;
-  if ($def ne '') {
-    print " [$def]";
-  }
-  print ": ";
-  my $inp = <STDIN>;
-  chomp($inp);
-  if ($inp =~ /^\s*$/) {
-    if ($def eq '' && $req) {
-      print "Response required!\n";
-      goto GUI_START;
-    }elsif($def ne '') {
-      return $def;
-    }else{
-      return '';
-    }
-  }
-  return $inp;
-}
-  
-  
 # Create a symlink and log it, etc.    
 #  - source
 #  - dest
@@ -154,14 +125,14 @@ sub _log {
     print STDERR $msg."\n";
   }
   if ($LOG_FILE ne '') {
-    open(LOG, ">>$LOG_FILE");
-    print LOG $msg."\n";
-    close(LOG);
+    open my $LOG, ">>", $LOG_FILE;
+    print $LOG $msg."\n";
+    close($LOG);
   }
+  return;
 }
 
 sub startup_checks {
-
   # Check that we can symlink
   my $sym_exists = eval { symlink('', ''); 1; };
   
@@ -181,6 +152,7 @@ sub make_NR_etc {
 		   service-xfer zone-config zone-gen zone-xfer/) {
     i_mkdir("$dir/etc/$sub", $NR_USER, $NR_GRP, '0775', $force);
   }
+  return;
 }
 
 sub make_NR_htdocs {
@@ -205,7 +177,7 @@ sub make_NR_htdocs {
     print "We need to know what user the web server is running as.\n".
       "Our best guess is that your server runs as : $USER\n";
   }
-  my $uname = getUserInput("Web Server User: ", $USER, 1);
+  my $uname = prompt("Web Server User: [$USER]", -d=>$USER);
   
   i_mkdir("$dir/htdocs", 'root', $NR_WHEEL, '0755', $force);
   i_mkdir("$dir/htdocs/bin", 'root', $NR_WHEEL, '0755', $force);
@@ -252,6 +224,7 @@ sub make_NR_tree {
   chomp($cur);
   chdir($ns);
   i_symlink($cur, "$dir/stable/netdb", 'root', $NR_WHEEL, '0755', $force);
+  return;
 }
 
 sub make_NR_lib {
@@ -264,14 +237,15 @@ sub make_NR_lib {
 	    "$dir/lib/DNS", 'root', $NR_WHEEL, '0755', $force);
   i_symlink("$dir/stable/netdb/lib/startup.pl",
 	    "$dir/lib/startup.pl", 'root', $NR_WHEEL, '0755', $force);
+  return;
 }
    
 sub make_toplevel {
   my ($force) = @_;
 
-  print "We run NetReg out of the /home/netreg directory.";
-  print "\nWe are, of course, offering you the chance to change this, though.\n";
-  my $dir = getUserInput("Homedir: ", "/home/netreg", 1);
+  print "We run NetReg out of the /home/netreg directory.\n";
+  print "We are, of course, offering you the chance to change this, though.\n";
+  my $dir = prompt("Homedir: [/home/netreg]", -d=>"/home/netreg");
   $NRHOME = $dir;
   i_mkdir($dir, 'root', $NR_WHEEL, '0755', $force);
   i_mkdir("$dir/logs", 'root', $NR_WHEEL, '0755', $force);
@@ -306,7 +280,7 @@ sub add_users {
     print "You appear to already have a '$NR_GRP' group. We are going to use ".
       "\nthis to setup directory permissions. If you want a different group ".
 	"\nname, edit the NR_GRP variable in this install script.\n";
-    my $co = getUserInput("Continue install (Y/N)?", "Y", 1);
+    my $co = prompt("Continue install (Y/N)? [Y]", -d=>"Y");
     unless ($co =~ /Y/) {
       _log("Group exists, not continuing. Aborting!\n");
       exit(5);
@@ -317,7 +291,7 @@ sub add_users {
 	"\nname, edit the NR_GRP variable in this install script.\n";
     print "\nWe need a valid 'groupadd' command that accepts the group name ".
       "as an argument.\n";
-    my $co = getUserInput("Group Add Command", "/usr/sbin/groupadd", 1);
+    my $co = prompt("Group Add Command [/usr/sbin/groupadd]", -d=>"/usr/sbin/groupadd");
     my $ret = system("$co $NR_GRP");
     $ret = $ret >> 8;
     if ($ret != 0) {
@@ -336,7 +310,7 @@ sub add_users {
     print "You appear to already have a '$NR_USER' user. We are going to use ".
       "\nthis to setup directory permissions. If you want a different user ".
         "\nname, edit the NR_USER variable in this install script.\n";
-    my $co = getUserInput("Continue install (Y/N)?", "Y", 1);
+    my $co = prompt("Continue install (Y/N)? [Y]", -d=>"Y");
     unless ($co =~ /Y/) {
       _log("User exists, not continuing. Aborting!\n");
       exit(5);
@@ -347,7 +321,7 @@ sub add_users {
         "name, edit the NR_USER variable in this install script.\n";
     print "\nWe need a valid 'useradd' commands that accepts the -c \n".
       "flag for user comment, and -g to specify the primary group. \n";
-    my $co = getUserInput("User Add Command", "/usr/sbin/useradd", 1);
+    my $co = prompt("User Add Command [/usr/sbin/useradd]", -d=>"/usr/sbin/useradd");
     my $ret = system("$co -c \"Network Registration\" -g $NR_GRP $NR_USER");
     $ret = $ret >> 8;
     if ($ret != 0) {
@@ -380,13 +354,13 @@ sub writeFile {
   }
   my $realGID = $gInfo[2];
   
-  my $res = open(FILE, ">$fn");
+  my $res = open my $FILE, ">", $fn;
   if (!$res) {
     _log("Unable to open file $fn for writing! Skipping!");
     return -1;
   }
-  print FILE $data;
-  close(FILE);
+  print $FILE $data;
+  close($FILE);
 
   if (chown($realUID, $realGID, $fn) != 1) {
     _log("writeFile: Error chowning $fn to $realUID:$realGID. Skipping!");
@@ -407,7 +381,7 @@ sub add_mysql {
   my ($path, $webUser) = @_;
   print "\n\n============== MySQL Passwords ==============\n";
   print "We're going to add three passwords (keys) to your MySQL installation.\n".
-    "You will need to enter your mysql root password twice. These passwords \n".
+    "You will need to enter your mysql root password. These passwords \n".
       "are stored as: $path/etc/.password, .password-maint, and \n".
 	".password-reports. \n\n";
   print "These passwords are randomly generated, and you do not need to\n".
@@ -425,32 +399,26 @@ sub add_mysql {
   writeFile("$path/etc/.password-reports", $webUser, $NR_GRP, '0440', 
 	    $RepPass);
 
-  my $sql =
-"GRANT SELECT,INSERT,UPDATE,DELETE,LOCK TABLES ON netdb.* to
-'netreg-web'@'localhost' identified by '$WebPass';
-GRANT SELECT,INSERT,UPDATE,DELETE,LOCK TABLES ON netdb.* to
-'netreg-maint'@'localhost' identified by '$MaintPass';
-GRANT SELECT,INSERT,LOCK TABLES ON netdb.* to
-'netreg-reports'@'localhost' identified by '$RepPass'; ";
-
-  my $mysql = find_mysql();
-
-  my $com = getUserInput("MySQL binary: ", $mysql, 1);
-  
-  print "Please enter your MySQL root password as requested: \n";
-  open(MYSQL, "|$com -u root -p mysql") || 
-    _log("Cannot open MySQL command $com!\n");
-  print MYSQL $sql;
-  close(MYSQL);
+  my $password = prompt('MySQL root password:', -e => '*');
+  my $dbh = DBI->connect("DBI:mysql:database=netdb;host=localhost", "root", "$password")
+    or die $DBI::errstr;
   _log("add_mysql: Adding passwords for 'netreg-web', 'netreg-maint', 'netreg-reports'\n");
+  $dbh->do(q{
+	GRANT SELECT,INSERT,UPDATE,DELETE,LOCK TABLES ON netdb.* to ?@? identified by ?
+  }, undef, 'netreg-web', 'localhost', "$WebPass");
+  $dbh->do(q{
+	GRANT SELECT,INSERT,UPDATE,DELETE,LOCK TABLES ON netdb.* to ?@? identified by ?
+  }, undef, 'netreg-maint', 'localhost', "$MaintPass");
+  $dbh->do(q{
+	GRANT SELECT,INSERT,LOCK TABLES ON netdb.* to ?@? identified by ?
+  }, undef, 'netreg-reports', 'localhost', "$RepPass");
   
   print "You should now have three new MySQL users: netreg-web, \n".
-    "netreg-maint, and netreg-reports. Please enter your MySQL \n".
-      "root password once more, to reload the grant tables.\n";
-  open(COM, "|${com}admin -u root -p reload") ||
-    _log("Cannot open MySQL admin command ${com}admin\n");
-  close(COM);
+    "   netreg-maint, and netreg-reports. \n";
   _log("add_mysql: Reloading MySQL grant tables..\n");
+  $dbh->do("FLUSH PRIVILEGES");
+  $dbh->disconnect;
+  return;
 }
 
 sub find_mysql {
@@ -474,7 +442,7 @@ via environment variables:\n";
   return 1;
 }
 
-# returns: 
+# returns: NOT currently used
 #  - result 
 #  - FileHeader (text)
 #  - rQVars (variables + description + default)
@@ -495,9 +463,10 @@ sub _load_configfile {
   # QVars are the variables from the configuration file
   my %QVars;
 
-  open(FILE, $FileName);
-  my @Contents = <FILE>;
-  close(FILE);
+  my $CFGFILE;
+  open $CFGFILE, $FileName;
+  my @Contents = <$CFGFILE>;
+  close $CFGFILE;
   $File{raw} = \@Contents;
   
   my $Location;
@@ -663,7 +632,7 @@ sub _load_configfile {
   return (1, $File{HEADER}, \%QVars, \@Order, \%File);
 }
 
-# _save_configfile
+# _save_configfile : NOT currently used
 # Arguments:
 #  - reference to file structure
 #  - reference to variable changes
@@ -671,7 +640,7 @@ sub _load_configfile {
 sub _save_configfile {
   my ($rFile, $rChanges, $NewFileName) = @_;
 
-  my $Res = open(FILE, ">$NewFileName");
+  my $Res = open my $SAVE_FILE, ">", $NewFileName;
   unless ($Res) {
     warn "Unable to open $NewFileName for writing!";
     return -1;
@@ -695,19 +664,19 @@ sub _save_configfile {
 	my $Val = $rChanges->{$Var};
 	$Val = '' if ($Val eq 'BLANK' || $Val eq "''" || $Val eq '""');
 
-	print FILE $actual." = ".$quote.$Val."$quote;\n";
+	print $SAVE_FILE $actual." = ".$quote.$Val."$quote;\n";
 	$Skip = $#Default;
 	next;
       }
     }
     
-    print FILE $Line;
+    print $SAVE_FILE $Line;
   }
-  close(FILE);
+  close($SAVE_FILE);
   return 1;
 }
 
-sub _print_table {
+sub _print_table {  # Not currently used
   my ($title, $rInfo, $rOrder) = @_;
 
  pt_start:
@@ -740,26 +709,10 @@ sub _print_table {
   return (-1),
 }
 
-# NOT USED
-#sub load_perlmods {
-#  my @Modules = @REQ_PERL_MODULES;
-
-#  foreach my $Module (@Modules) {
-#    my $ModObj = CPAN::Shell->expand('Module', $Module);
-#    if ($ModObj->uptodate) {
-#      print "$Module up to date\n";
-#    }else{
-#      print "Installing $Module\n";
-#      $ModObj->install;
-#    }
-    
-#  }
-  
-#}
-
 sub main {
   my $FORCE = 0;
   my $CONFIG_ONLY = 0;
+  my $MYSQL_ONLY = 0;
 
   foreach(@ARGV) {
     if ($_ eq '-force') {
@@ -776,11 +729,11 @@ sub main {
 
   if (-e $LOG_FILE) {
     print "$LOG_FILE already exists.\n";
-    my $ow = getUserInput("Overwrite logfile? (Yes/eXit)", "X", 1);
+    my $ow = prompt("Overwrite logfile? (Yes/eXit)", -d=>"X");
     if ($ow =~ /Y/i) {
-      open(LOG, ">$LOG_FILE") ||
+      open my $LOG, ">", $LOG_FILE ||
 	die "Cannot open log file $LOG_FILE for output.";
-      close(LOG);
+      close($LOG);
     }else{
       print "Exiting installation.\n";
       exit(2);
@@ -791,7 +744,7 @@ sub main {
     print "netreg-install is not being run as root. We recommend you run as ".
       "root to avoid any permissions problems. If you insist, though, we'll ".
 	"do our best to run as the current user.\n";
-    my $con = getUserInput("Continue? (Y/N)", "N", 1);
+    my $con = prompt("Continue? (Y/N) [N]", -d=>"N");
     if ($con =~ /Y/i) {
       print "Continuing to run as user $>\n";
     }else{
@@ -806,5 +759,6 @@ sub main {
   &add_mysql($dir, $webUName);
 CONFIG_RUN:
   &do_config('netreg-netdb.conf', 'netreg-webint.conf', 'netreg-soap.conf');
+return;
 }
 

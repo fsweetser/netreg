@@ -8,7 +8,12 @@
 #
 
 use strict;
+use warnings;
 
+use vars_l;
+use lib $vars_l::NRLIB;
+use Carp;
+use IO::Prompt;
 use CMU::Netdb;
 use CMU::Netdb::config;
 use Data::Dumper;
@@ -20,6 +25,13 @@ use Text::ParseWords;
 my $Version = '1.0';
 
 my @Modes = qw/deptadd useradd buildingadd subnetadd dnsimport/;
+my %mode_table = (
+	"deptadd" => \&deptadd,
+	"useradd" => \&useradd,
+	"buildingadd" => \&buildingadd,
+	"subnetadd" => \&subnetadd,
+	"dnsimport" => \&dnsimport,
+);
 
 my %options;
 my $res = GetOptions (\%options, "help|h|usage",
@@ -39,13 +51,18 @@ my $res = GetOptions (\%options, "help|h|usage",
 
 usage() if (defined $options{'help'} && $options{'help'} == 1);
 
+
 my $MCount = 0;
+my $mode = '';
 foreach my $M (@Modes) {
-    $MCount++ if (defined $options{$M} && $options{$M});
+    if (defined $options{$M} && $options{$M}){
+	    $MCount++;
+	    $mode = $M;
+    }
 }
-die "More than one operation mode specified!" if ($MCount > 1);
+croak "More than one operation mode specified!" if ($MCount > 1);
 if ($MCount != 1) {
-    warn "No operation mode specified!";
+    carp "No operation mode specified!";
     usage();
 }
 
@@ -60,24 +77,23 @@ my $dbh = DBI->connect($dbp->{'connect'}, $dbp->{'user'}, $dbp->{'pass'});
 
 CMU::Netdb::xaction_begin($dbh) if ($options{'atomic'});
 
-foreach my $M (@Modes) {
-    no strict;
-    $M->($dbh) if (defined $options{$M} && $options{$M});
-}
+$mode_table{$mode}->($dbh);
 
 CMU::Netdb::xaction_commit($dbh) if ($options{'atomic'});
 
 exit 0;
 
+#End main code, start subs
+
 sub deptadd {
     my ($dbh) = @_;
-
-    while(my $line = <STDIN>) {
+    while(my $line = prompt("Enter line as: dept:[deptname] \"[Department Description]\"\n")) {
 	next if ($line =~ /^\s*\#/);
+	return if ($line =~ /^$/x);
 
 	my ($deptid, $name) = shellwords($line);
 	unless ($deptid =~ /^dept\:\S+$/) {
-	    warn "Department ID should be of the form 'dept:FOO'"
+	    carp "Department ID should be of the form 'dept:FOO'"
 		unless ($options{'quiet'});
 	    next;
 	}
@@ -88,13 +104,16 @@ sub deptadd {
 	print "Adding group $deptid/$name\n" if ($options{'debug'});
 	netreg_add_group($dbh, \%Group);
     }
+return;
 }
 
 sub useradd { 
     my ($dbh) = @_;
 
-    while(my $line = <STDIN>) {
+    print "Enter lines as: [credential] \"[Real Name]\"\n";
+    while(my $line = prompt("Enter lines as: [credential] \"[Real Name]\"\n")) {
 	next if ($line =~ /^\s*\#/);
+	return if ($line =~ /^$/);
 
 	my ($authid, $name) = shellwords($line);
 	my %User = ('authid' => $authid,
@@ -104,13 +123,15 @@ sub useradd {
 	print "Adding user $authid/$name\n" if ($options{'debug'});
 	netreg_add_user($dbh, \%User);
     }
+return;
 }
 
 sub buildingadd { 
     my ($dbh) = @_;
 
-    while(my $line = <STDIN>) {
+    while(my $line = prompt("Enter line as: [Building ID] [Building Abbreviation] \"[Building Name]\"")) {
 	next if ($line =~ /^\s*\#/);
+	return if ($line =~ /^$/x);
 
 	my ($id, $abbrev, $name) = shellwords($line);
 	my %Building = {'name' => $name,
@@ -119,6 +140,7 @@ sub buildingadd {
 	print "Adding building $id/$abbrev/$name\n" if ($options{'debug'});
 	netreg_add_building($dbh, \%Building);
     }
+return;
 }
 
 sub subnetadd { 
@@ -126,8 +148,9 @@ sub subnetadd {
 
     my $rSubnets = netreg_get_subnets($dbh);
 
-    while(my $line = <STDIN>) {
+    while(my $line = prompt("Enter line as: [Abbrev] \"[Name]\" [Base Addr] [Mask] [Delegated]\n")) {
 	next if ($line =~ /^\s*\#/);
+	return if ($line =~ /^$/x);
 
 	my ($abbrev, $name, $base, $mask, $delegated) = shellwords($line);
 	$delegated = 0 unless (defined $delegated); 
@@ -144,7 +167,7 @@ sub subnetadd {
 	if (ref $rSubnet) {
 	    if ($rSubnet->{'subnet.base_address'} ne $xbase ||
 		$rSubnet->{'subnet.network_mask'} ne $xmask) {
-		warn "Subnet difference: \n".
+		carp "Subnet difference: \n".
 		    '|'.$rSubnet->{'subnet.base_address'}.'|'.$xbase."|\n".
 		    '|'.$rSubnet->{'subnet.network_mask'}.'|'.$xmask."|\n"
 		unless ($options{'quiet'});
@@ -194,8 +217,6 @@ sub subnetadd {
 
 	# Add basic DNS zone information for this subnet
 	# Develop a list of the reverse zones
-	my $xbase = CMU::Netdb::dot2long($base);
-	my $xmask = CMU::Netdb::dot2long($mask);
 	my $xend = $xbase | (~$xmask);
 	my $tbase = $xbase >> 8;
 	my $tend = $xend >> 8;
@@ -209,7 +230,7 @@ sub subnetadd {
 
 	foreach my $Z (@Zones) {
 	    # See if the zones already exist
-	    my $rZone = netreg_get_zone($dbh, $Z);
+	    my $rZone = netreg_get_zone($dbh, $Z, 0);
 	    next if (ref $rZone);
 
 	    # Zone doesn't exist
@@ -241,26 +262,28 @@ sub subnetadd {
 	    netreg_add_permissible_zone($dbh, $Z);
 	}
     }
+return;
 }
 
 sub dnsimport {
     my ($dbh) = @_;
 
-    die "--user must be specified for machine registrations"
+    croak "--user must be specified for machine registrations"
 	unless (defined $options{'user'} && $options{'user'} ne '');
-    die "--dept must be specified for machine registrations"
+    croak "--dept must be specified for machine registrations"
 	unless (defined $options{'dept'} && $options{'dept'} ne '');
 
     my %ImportInfo;
 
-    while(my $line = <STDIN>) {
+    while(my $line = prompt("Enter line as: [Zone Name] [Import Method]\n")) {
 	next if ($line =~ /^\s*\#/);
+	return if ($line =~ /^$/x);
 
 	my ($zone, $method, $extra) = split(/\s+/, $line, 3);
 
 	if ($method eq 'file') {
 	    unless (-r $extra) {
-		warn "Import method 'file', file ($extra) not readable"
+		carp "Import method 'file', file ($extra) not readable"
 		    unless ($options{'quiet'});
 		next;
 	    }
@@ -281,18 +304,19 @@ sub dnsimport {
 
 	    }
 	}else{
-	    warn "Unknown import method: $method"
+	    carp "Unknown import method: $method"
 		unless ($options{'quiet'});
 	    next;
 	}
+        dnsimport_exec($dbh, \%ImportInfo);
     }
-    dnsimport_exec($dbh, \%ImportInfo);
+    return;
 }
 
 sub dnsimport_file {
     my ($zone, $file, $rImportInfo) = @_;
 
-    my $Zone = new DNS::ZoneParse();
+    my $Zone = DNS::ZoneParse->new();
     $Zone->Set_Debug(50) if ($options{'debug'});
 
     $Zone->Prepare($file, $zone, 86400);
@@ -305,12 +329,13 @@ sub dnsimport_file {
 		 $Record);
 	}
     }
+    return;
 }
 
 sub dnsimport_axfr {
     my ($zone, $rImportInfo) = @_;
 
-    my $Zone = new DNS::ZoneParse();
+    my $Zone = DNS::ZoneParse->new();
     $Zone->Set_Debug(50) if ($options{'debug'});
 
     my @Servers;
@@ -341,8 +366,8 @@ sub dnsimport_axfr {
 		     $Record);
 	    }
 	}
-	return;
     }
+    return;
 }
 
 # Using the ImportInfo, perform the actual updates
@@ -354,7 +379,7 @@ sub dnsimport_exec {
 
     foreach my $Label (keys %{$rII->{'rr'}->{'SOA'}}) {
 	if (scalar(@{$rII->{'rr'}->{'SOA'}->{$Label}}) > 1) {
-	    warn "Multiple SOA records for $Label!"
+	    carp "Multiple SOA records for $Label!"
 		unless ($options{'quiet'});
 	    next;
 	}
@@ -384,7 +409,7 @@ sub dnsimport_exec {
 
 	# See if the zone exists. If so, we'll compare the values and
 	# modify if necessary.
-	my $rZone = netreg_get_zone($dbh, $Name);
+	my $rZone = netreg_get_zone($dbh, $Name, 0);
 
 	# The zone doesn't exist, so just add it.
 	unless (ref $rZone) {
@@ -394,7 +419,7 @@ sub dnsimport_exec {
 	    my $Match = 1;
 	    foreach my $field (keys %Zone) {
 		unless (defined $rZone->{'dns_zone.'.$field}) {
-		    warn "Zone $Label field $field not defined!"
+		    carp "Zone $Label field $field not defined!"
 			unless ($options{'quiet'});
 		}
 		$Match = 0 if (defined $rZone->{'dns_zone.'.$field} && 
@@ -424,7 +449,7 @@ sub dnsimport_exec {
 	next if (defined $ZonesReady{uc($Z)});
 
 	# See if it exists
-	my $rZone = netreg_get_zone($dbh, $Z);
+	my $rZone = netreg_get_zone($dbh, $Z, 0);
 
 	if (ref $rZone) {
 	    $ZonesReady{uc($Z)} = 1;
@@ -476,7 +501,7 @@ sub dnsimport_exec {
 	    # Add a new machine
 	    my $subnet = netreg_get_subnet_by_ip($dbh, $IP);
 	    unless (ref $subnet) {
-		warn "No subnet found for IP $IP, skipping $Label"
+		carp "No subnet found for IP $IP, skipping $Label"
 		    unless ($options{'quiet'});
 		next;
 	    }
@@ -517,7 +542,7 @@ sub dnsimport_exec {
     # Go through PTRs, comparing to machines. 
     foreach my $Label (keys %{$rII->{'rr'}->{'PTR'}}) {
 	if (scalar(@{$rII->{'rr'}->{'PTR'}}) > 1) {
-	    warn "Unable to handle multiple PTRs for a single label"
+	    carp "Unable to handle multiple PTRs for a single label"
 		unless ($options{'quiet'});
 	}
 		
@@ -529,7 +554,7 @@ sub dnsimport_exec {
 	    # Add a machine for it.
 	    my $subnet = netreg_get_subnet_by_ip($dbh, $LIP);
 	    unless (ref $subnet) {
-		warn "No subnet found for IP $LIP, skipping $Label"
+		carp "No subnet found for IP $LIP, skipping $Label"
 		    unless ($options{'quiet'});
 		next;
 	    }
@@ -547,12 +572,10 @@ sub dnsimport_exec {
 	}
 	   
 	# Do the IPs match?
-	my $Label =~ /(\d+)\.(\d+)\.(\d+)\.(\d+)\./;
-	my $LIP = "$4.$3.$2.$1";
 	my $recIP = CMU::Netdb::helper::long2dot
 	    ($rMach->{$HN}->{'machine.ip_address'});
 	if ($LIP ne $recIP) {
-	    warn "PTR record doesn't match machine ($HN): ".
+	    carp "PTR record doesn't match machine ($HN): ".
 		"PTR=$LIP, machine=$recIP"
 		unless ($options{'quiet'});
 	}
@@ -565,7 +588,7 @@ sub dnsimport_exec {
 
 	    $Name =~ s/\.$//;
 	    if (!defined $rMach->{$Name}) {
-		warn "$rr RR but no machine for: $Label"
+		carp "$rr RR but no machine for: $Label"
 		    unless ($options{'quiet'});
 		next;
 	    }
@@ -580,7 +603,7 @@ sub dnsimport_exec {
     # List the current DNS resources
     my $rExResources = netreg_list_all_dns_resources($dbh);
     unless (ref $rExResources) {
-	die "Error listing dns resources";
+	croak "Error listing dns resources";
     }
 
     # Go through NS & MX, attaching to zones
@@ -589,7 +612,7 @@ sub dnsimport_exec {
 	    my $ULabel = uc($Label);
 	    next if ($rr eq 'MX' && !$ZonesReady{$ULabel});
 	    if ($rr eq 'NS' && !$ZonesReady{$ULabel}) {
-		warn "No zone for NS record ($Label)!"
+		carp "No zone for NS record ($Label)!"
 		    unless ($options{'quiet'});
 		next;
 	    }
@@ -602,13 +625,13 @@ sub dnsimport_exec {
 		my $rMach = netreg_get_machine_by_hostname($dbh, 
 							   $Rec->{'rdata'});
 		unless (ref $rMach) {
-		    warn "Error getting machine information for: ".
+		    carp "Error getting machine information for: ".
 			$Rec->{'rdata'} unless ($options{'quiet'});
 		    next;
 		}
-		my $rZone = netreg_get_zone($dbh, $Label);
+		my $rZone = netreg_get_zone($dbh, $Label, 0);
 		unless (ref $rZone) {
-		    warn "Error getting zone information for: $Label"
+		    carp "Error getting zone information for: $Label"
 			unless ($options{'quiet'});
 		    next;
 		}
@@ -640,7 +663,7 @@ sub dnsimport_exec {
 
 	    my $rMach = netreg_get_machine_by_hostname($dbh, $Label);
 	    unless (ref $rMach) {
-		warn "Error getting machine information for: $Label"
+		carp "Error getting machine information for: $Label"
 		    unless ($options{'quiet'});
 		next;
 	    }
@@ -662,7 +685,7 @@ sub dnsimport_exec {
 	next if ($ZonesReady{$ULabel});
 	
 	if (scalar(@{$rII->{'rr'}->{'CNAME'}->{$Label}}) > 1) {
-	    warn "Only one CNAME for a label permissible" 
+	    carp "Only one CNAME for a label permissible" 
 		unless $options{'quiet'};
 	}
 
@@ -674,7 +697,7 @@ sub dnsimport_exec {
 	
 	my $rMach = netreg_get_machine_by_hostname($dbh, $Rec->{'rdata'});
 	unless (ref $rMach) {
-	    warn "Error getting machine information for: ".
+	    carp "Error getting machine information for: ".
 		$Rec->{'rdata'} unless ($options{'quiet'});
 	    next;
 	}
@@ -700,7 +723,7 @@ sub dnsimport_exec {
 
 	    my $rMach = netreg_get_machine_by_hostname($dbh, $Rec->{'rdata'});
 	    unless (ref $rMach) {
-		warn "Error getting machine information for: ".
+		carp "Error getting machine information for: ".
 		    $Rec->{'rdata'} unless ($options{'quiet'});
 		next;
 	    }
@@ -715,6 +738,7 @@ sub dnsimport_exec {
 	    netreg_add_dns_resource($dbh, \%Resource);
 	}
     }
+    return;
 }
 
 sub netreg_list_all_dns_resources {
@@ -752,6 +776,7 @@ sub netreg_add_dns_resource {
 						   $rResource);
 
     generror($dbh, $res, $ref, 'add_dns_resource') if ($res != 1);
+    return;
 }
 
 sub netreg_add_building {
@@ -760,6 +785,7 @@ sub netreg_add_building {
     my ($res, $ref) = CMU::Netdb::add_building($dbh, $options{'netreguser'},
 					       $rBuilding);
     generror($dbh, $res, $ref, 'add_building') if ($res != 1);
+    return;
 }
 
 sub netreg_add_user {
@@ -786,6 +812,7 @@ sub netreg_add_user {
 	return;
     }
     CMU::Netdb::xaction_commit($dbh) unless ($options{'atomic'});
+    return;
 }
 
 sub netreg_add_group {
@@ -795,6 +822,7 @@ sub netreg_add_group {
 					    $rGroup);
 
     generror($dbh, $res, $ref, 'add_group') if ($res != 1);
+    return;
 }
 
 sub netreg_get_machine_by_hostname {
@@ -803,7 +831,7 @@ sub netreg_get_machine_by_hostname {
     my $ref = CMU::Netdb::list_machines($dbh, $options{'netreguser'},
 					"machine.host_name = '$host'");
     unless (ref $ref) {
-	die "list_machines error: $ref";
+	croak "list_machines error: $ref";
     }
 
     return '' unless (scalar(@$ref) == 2);
@@ -819,7 +847,7 @@ sub netreg_list_all_machines {
 
     my $ref = CMU::Netdb::list_machines($dbh, $options{'netreguser'}, '');
     unless (ref $ref) {
-	die "list_machines error: $ref";
+	croak "list_machines error: $ref";
     }
 
     my %Machines;
@@ -846,6 +874,7 @@ sub netreg_add_machine {
 					      9, $rMachine, \%Perms);
 
     generror($dbh, $res, $ref, 'add_machine') if ($res != 1);
+    return;
 }
 
 # 
@@ -871,6 +900,7 @@ sub netreg_update_machine {
 	 $ID, $Version, 9, \%Fields);
 
     generror($dbh, $res, $ref, 'modify_machine');
+    return;
 }
 
 # Verify/create a tree of zones to this point
@@ -880,7 +910,7 @@ sub netreg_zone_tree {
     return if ($name eq '');
 
     # See if $name exists
-    my $rZone = netreg_get_zone($dbh, $name);
+    my $rZone = netreg_get_zone($dbh, $name, 0);
 
     # The zone exists
     return if (ref $rZone);
@@ -912,6 +942,7 @@ sub netreg_zone_tree {
 		);
 
     netreg_add_zone($dbh, \%Zone);
+    return;
 }
 
 # Get a dns zone by name
@@ -923,11 +954,11 @@ sub netreg_get_zone {
     my $ref = CMU::Netdb::list_dns_zones($dbh, $options{'netreguser'},
 					 "dns_zone.name = '$name'");
     unless (ref $ref) {
-	die "list_dns_zones ($name) error: $ref";
+	croak "list_dns_zones ($name) error: $ref";
     }
 
     if (scalar(@$ref) > 2) {
-	warn "list_dns_zones ($name) returned more than 1 zone"
+	carp "list_dns_zones ($name) returned more than 1 zone"
 	    unless ($options{'quiet'});
     }elsif(scalar(@$ref) == 2) {
 	my %pos = %{CMU::Netdb::makemap($ref->[0])};
@@ -990,6 +1021,7 @@ sub netreg_add_zone {
     my ($res, $ref) = CMU::Netdb::add_dns_zone($dbh, $options{'netreguser'},
 					       $rZone);
     generror($dbh, $res, $ref, 'add_dns_zone') if ($res != 1);
+    return;
 }
 
 # Update the specific zone ($id/$version) with the specified fields
@@ -1000,6 +1032,7 @@ sub netreg_modify_zone {
 						  $id, $version, $rFields);
 
     generror($dbh, $res, $ref, 'modify_dns_zone') if ($res != 1);
+    return;
 }
 
 sub netreg_add_subnet {
@@ -1023,6 +1056,7 @@ sub netreg_add_subnet {
 				    }, 'admin_default_add');
 
     generror($dbh, $res, $ref, 'subnet_registration_mode') if ($res != 1);
+    return;
 }
 
 sub netreg_get_subnets {
@@ -1050,11 +1084,11 @@ sub netreg_get_subnet_by_ip {
 	($dbh, $options{'netreguser'},
 	 "(INET_ATON('$IP') & subnet.network_mask) = subnet.base_address");
     unless (ref $ref) {
-	die "list_subnets ($IP) error: $ref";
+	croak "list_subnets ($IP) error: $ref";
     }
     return '' if (scalar(@$ref) == 1);
     if (scalar(@$ref) > 2) {
-	warn "list_subnets ($IP) returned more than 1 subnet"
+	carp "list_subnets ($IP) returned more than 1 subnet"
 	    unless ($options{'quiet'});
     }
 
@@ -1118,39 +1152,39 @@ netregimport [mode] [options]
 sub generror {
     my ($dbh, $res, $ref, $call) = @_;
 
-    my $Fields = join(',', @$ref) if (ref $ref eq 'ARRAY');
-    warn "Error executing $call: $res [$Fields]"
+    my $Fields;
+    $Fields = join(',', @$ref) if (ref $ref eq 'ARRAY');
+    carp "Error executing $call: $res [$Fields]"
 	unless ($options{'quiet'});
 
     if ($options{'atomic'}) {
 	CMU::Netdb::xaction_rollback($dbh);
-	  die "Error caused transaction abort.";
-	  exit(2);
+	croak "Error caused transaction abort.";
       }
 }
 
 sub db_connect {
   my $TestDB = get_multi_conf_var('netdb', 'DB-MAINT');
-  die "Could not load maint information" unless (ref $TestDB);
+  croak "Could not load maint information" unless (ref $TestDB);
 
-  die "Could not find connect string information"
+  croak "Could not find connect string information"
     unless (defined $TestDB->{'connect_string'});
 
   my $Pass;
 
   if (defined $TestDB->{'password_file'}) {
-    open(FILE, $TestDB->{'password_file'})
-      || die("Cannot open DB password file (".
+    open my $FILE, '<', $TestDB->{'password_file'}
+      or croak("Cannot open DB password file (".
 	     $TestDB->{'password_file'}.")");
-    $Pass = <FILE>;
+    $Pass = <$FILE>;
+    close $FILE;
     chomp($Pass);
-    close(FILE);
   }else{
     $Pass = $TestDB->{'password'};
   }
 
-  return {'connect' => $TestDB->{'connect_string'},
+  return {('connect' => $TestDB->{'connect_string'},
           'user' => $TestDB->{'username'},
-          'pass' => $Pass,
+          'pass' => $Pass)
       };
 }
