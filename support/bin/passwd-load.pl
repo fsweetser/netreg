@@ -126,7 +126,7 @@ writelog(0,"$date: user_sync started") ;
 $dbh = lw_db_connect();
 if (!$dbh) {
   &admin_mail('user_sync.pl', 'Unable to connect to database: '.$!);
-  die "Unable to connect to database.\n";
+  croak "Unable to connect to database.\n";
 }
 
 getLock($dbh, 'USERSYNC_LOCK', 'user_sync.pl', 60);
@@ -169,8 +169,9 @@ foreach my $user (@user_list) {
 writelog(0,"Loaded ".scalar(keys(%db_users))." users from database.\n");
 
 #this compares the two hashes to see what is missing from where.  When finished, %c_users
-#contains all the users we have to add to the db, while %e_users contains people who are in
+#contains all the users we have to change in the db, while %e_users contains people who are in
 #the db but not in the passwd file and will be logged somehow.
+# And %p_users will be the users from the passwd file that aren't in the database and need to be added.
 
 # %c_users are users that we need to change
 my %c_users;
@@ -190,7 +191,7 @@ foreach my $db_name (keys %db_users) {
 writelog(0,"Found ".scalar(keys(%p_users))." users from passwd not in the db.\n");
 
 #for each user in the passwd hash that is left after removing those already in the db (above),
-#we call the add_user with the user.name and user.comment and throw it into the db
+#we call the add_user and add_credentials with the user.name and user.comment and throw it into the db
 foreach my $passwd_name (keys %p_users) {
   # start a transaction
   my ($xtres, $xtref) = CMU::Netdb::xaction_begin($dbh);
