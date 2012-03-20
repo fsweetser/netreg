@@ -1216,8 +1216,11 @@ sub verify_table_field {
   }
 
   my $TArray = "CMU::Netdb::structure::${table}_fields";
-  # Can't verify as the array doesn't exist.. but structure.pl tests this
-  return $in unless (defined @$TArray);
+  {
+    no strict 'refs';
+    # Can't verify as the array doesn't exist.. but structure.pl tests this
+    return $in unless (defined @{$TArray});
+  }
 
   my @SFields;
   eval '@SFields = @'.$TArray.';';
