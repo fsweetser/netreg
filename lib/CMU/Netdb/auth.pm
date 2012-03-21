@@ -312,7 +312,7 @@ sub list_users {
   }
 
   $result = CMU::Netdb::primitives::list
-    ($dbh, $dbuser, "users $Join credentials ON credentials.user = users.id",
+    ($dbh, $dbuser, "credentials $Join users ON credentials.user = users.id",
      \@Fields, $where);
 
   if (!ref $result) {
